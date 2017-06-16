@@ -52,8 +52,6 @@ def ExtractCBCT(img_path,bone_mask_path,vessel_path):
 	otsuFilter.SetNumberOfThresholds(4)
 	seg = otsuFilter.Execute(img)
 
-	# vessel_seg = seg
-
 	thresholdFilter = sitk.BinaryThresholdImageFilter()
 	thresholdFilter.SetInsideValue (1)
 	thresholdFilter.SetLowerThreshold(2)
