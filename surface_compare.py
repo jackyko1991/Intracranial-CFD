@@ -22,8 +22,6 @@ def SurfaceDistance(threeDRA_path,CBCT_path,output_path):
   	connectivityFilter.SetInputData(distanceFilter.GetOutput())
 	connectivityFilter.Update()
 
-
-
   	writer = vtk.vtkXMLPolyDataWriter()
   	writer.SetFileName(output_path)
   	writer.SetInputData(connectivityFilter.GetOutput())
