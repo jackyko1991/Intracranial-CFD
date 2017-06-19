@@ -28,7 +28,7 @@ def SurfaceDistance(threeDRA_path,CBCT_path,output_path):
   	writer.Update()
 
 def main():
-	data_folder = "I:/CFD/intracranial CBCT 3DRA/comparison/ChanSP/"
+	data_folder = "I:/CFD/intracranial CBCT 3DRA/comparison/YeungYC/"
 
 	SurfaceDistance(data_folder + '3DRA/surface.stl',data_folder + 'CBCT/surface.stl',data_folder + '/surfaceDistance.vtp')
 
