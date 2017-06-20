@@ -28,9 +28,31 @@ def SurfaceDistance(threeDRA_path,CBCT_path,output_path):
   	writer.Update()
 
 def main():
-	data_folder = "I:/CFD/intracranial CBCT 3DRA/comparison/YeungYC/"
+	data_folder = "D:/Cloud/Google Drive/intracranial vessels/followup/stent/"
+	for patient in os.listdir(data_folder):
+		print "Working on patient",patient
 
-	SurfaceDistance(data_folder + '3DRA/surface.stl',data_folder + 'CBCT/surface.stl',data_folder + '/surfaceDistance.vtp')
+		if not os.path.isfile(data_folder + patient + '/baseline/surface.stl') :
+			print patient + '/baseline/surface.stl not exist, case skipped'
+			return
+
+		if os.path.isfile(data_folder + patient + '/baseline-post/surface.stl') :
+			print "Progress: post stent"
+			SurfaceDistance(data_folder + patient +  '/baseline/surface.stl',data_folder + patient + '/baseline-post/surface.stl',data_folder + patient + '/baseline-post/surfaceDistance.vtp')
+		else:
+			print patient + '/baseline-post/surface.stl not exist'
+
+		if os.path.isfile(data_folder + patient + '/12months/surface.stl') :
+			print "Progress: 12 months"
+			SurfaceDistance(data_folder + patient +  '/baseline/surface.stl',data_folder + patient + '/12months/surface.stl',data_folder + patient + '/12months/surfaceDistance.vtp')
+		else:
+			print patient + '/12months/surface.stl not exist'
+		
+		if os.path.isfile(data_folder + patient + '/followup/surface.stl') :
+			print "Progress: followup"
+			SurfaceDistance(data_folder + patient +  '/baseline/surface.stl',data_folder + patient + '/followup/surface.stl',data_folder + patient + '/followup/surfaceDistance.vtp')
+		else:
+			print patient + '/followup/surface.stl not exist'
 
 if __name__ == "__main__":
     main()
