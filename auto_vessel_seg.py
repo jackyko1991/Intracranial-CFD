@@ -44,19 +44,26 @@ def ExtractCBCT(img_path,vessel_path):
 	reader.SetFileName(img_path)
 	img = reader.Execute()
 
-	reader.SetFileName(bone_mask_path)
-	bone_mask = reader.Execute()
+	# reader.SetFileName(bone_mask_path)
+	# bone_mask = reader.Execute()
 
 	otsuFilter = sitk.OtsuMultipleThresholdsImageFilter()
 	otsuFilter.SetNumberOfHistogramBins (256)
 	otsuFilter.SetNumberOfThresholds(4)
 	seg = otsuFilter.Execute(img)
 
+	# thresholdFilter = sitk.ThresholdImageFilter()
+	# # thresholdFilter.SetInsideValue (1)
+	# thresholdFilter.SetLower(2) # 2 and/or 3, depends on data
+	# thresholdFilter.SetUpper(3.1)
+	# thresholdFilter.SetOutsideValue (0)
+	# vessel_seg = thresholdFilter.Execute(seg)
+
 	thresholdFilter = sitk.BinaryThresholdImageFilter()
 	thresholdFilter.SetInsideValue (1)
-	thresholdFilter.SetLowerThreshold(2)
 	thresholdFilter.SetOutsideValue (0)
-	thresholdFilter.SetUpperThreshold(2.1)
+	thresholdFilter.SetLowerThreshold(2) # 2 and/or 3, depends on data
+	thresholdFilter.SetUpperThreshold(3.1)
 	vessel_seg = thresholdFilter.Execute(seg)
 
 	fillingFilter = sitk.BinaryFillholeImageFilter()
@@ -67,10 +74,12 @@ def ExtractCBCT(img_path,vessel_path):
 	writer.Execute(vessel_seg)
 
 def main():
-	data_folder = "I:/CFD/intracranial CBCT 3DRA/comparison/ChickFK/"
+	data_folder = "D:/Cloud/Google Drive/intracranial vessels/followup/stent/LingKW/"
 
-	Extract3DRA(data_folder + "3DRA/3DRA.nii",data_folder + "3DRA/seg_vessel.nii")
-	ExtractCBCT(data_folder + "CBCT/CBCT_resample.nii",data_folder + "CBCT/seg_vessel.nii")
+	# Extract3DRA(data_folder + "baseline/3DRA.nii",data_folder + "baseline/seg_vessel.nii")
+	# Extract3DRA(data_folder + "baseline-post/3DRA.nii",data_folder + "baseline-post/seg_vessel.nii")
+	# Extract3DRA(data_folder + "12months/3DRA.nii",data_folder + "12months/seg_vessel.nii")
+	ExtractCBCT(data_folder + "followup/CBCT.nii",data_folder + "followup/seg_vessel.nii")
 
 if __name__ == "__main__":
     main()
