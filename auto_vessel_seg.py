@@ -1,6 +1,5 @@
 import os
 import SimpleITK as sitk
-import vtk
 
 def Extract3DRA(img_path,vessel_path):
 	reader = sitk.ImageFileReader()
