@@ -7,13 +7,13 @@ def parse_args():
 	parser = argparse.ArgumentParser(description = "Intracranial Vessel Analysis Tool")
 	parser.add_argument("--data-dir", type=str, default="../data/3DRA-CBCT/",
 		help="Data directory")
-	parser.add_argument("--dcm2nii", type=bool, default=True,
+	parser.add_argument("--dcm2nii", type=bool, default=False,
 		help="Option to convert DICOM to Nifti")
-	parser.add_argument("--segmentation", type=bool, default=False,
+	parser.add_argument("--segmentation", type=bool, default=True,
 		help="Segment vessels")
 	return parser.parse_args()
 
-def batch_dcm2nii():
+def batch_dcm2nii(args):
 	print("Batch DICOM to Nifti conversion...")
 
 	dataDir = args.data_dir
@@ -28,14 +28,20 @@ def batch_dcm2nii():
 		dcm2nii(os.path.join(dataDir,patient,"dicom","CBCT"),os.path.join(dataDir,patient,"nii","CBCT.nii.gz"))
 
 def batch_segmentation(args):
-	print("Batch vessel segmentaion...")
+	print("Batch vessel segmentation...")
 
 	dataDir = args.data_dir
 
-	# Extract3DRA(data_folder + "baseline/3DRA.nii",data_folder + "baseline/seg_vessel.nii")
-	# Extract3DRA(data_folder + "baseline-post/3DRA.nii",data_folder + "baseline-post/seg_vessel.nii")
-	# Extract3DRA(data_folder + "12months/3DRA.nii",data_folder + "12months/seg_vessel.nii")
-	ExtractCBCT(data_folder + "followup/CBCT.nii",data_folder + "followup/seg_vessel.nii")
+	for patient in os.listdir(dataDir):
+		if not os.path.exists(os.path.join(dataDir,patient,"nii","3DRA.nii.gz")):
+			continue
+		auto_vessel_seg.Extract3DRA(os.path.join(dataDir,patient,"nii","3DRA.nii.gz"),os.path.join(dataDir,patient,"nii","3DRA_seg.nii.gz"))
+
+		if not os.path.exists(os.path.join(dataDir,patient,"nii","CBCT_reg.nii.gz")):
+			continue
+		auto_vessel_seg.ExtractCBCT(os.path.join(dataDir,patient,"nii","CBCT_reg.nii.gz"),os.path.join(dataDir,patient,"nii","CBCT_seg.nii.gz"))
+
+		exit()
 
 def main():
 	args = parse_args()
