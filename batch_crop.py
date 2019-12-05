@@ -73,19 +73,72 @@ def execute(working_dir):
 
 	print(start_id,start_point,start_point_tangent,start_point_normal,start_point_binormal)
 
-	planeSource = vtk.vtkPlaneSource()
-	planeSource.SetNormal(start_point_tangent)
-	planeSource.SetCenter(start_point)
-	planeSource.Update()
+	# create a clipping box widget
+	clipWidget = vtk.vtkBoxWidget()
+	transform = vtk.vtkTransform()
 
+	transform.Translate(start_point[0],start_point[1],start_point[2])	
+	w = math.atan(math.sqrt(start_point_tangent[0]**2+start_point_tangent[1]**2)/start_point_tangent[2])*180/3.14
+	transform.RotateWXYZ(w, -start_point_tangent[1], start_point_tangent[0],0)
+	transform.Scale(10,10,1)
+	
+	print(transform.GetMatrix())
 
+	clipBox = vtk.vtkCubeSource()
+	transformFilter = vtk.vtkTransformPolyDataFilter()
+	transformFilter.SetInputConnection(clipBox.GetOutputPort())
+	transformFilter.SetTransform(transform)
+	transformFilter.Update()
+
+	writer.SetFileName(os.path.join(working_dir,"clip_box.stl"))
+	writer.SetInputData(transformFilter.GetOutput())
+	writer.Update()
+
+	clipWidget.SetTransform(transform)
+	clipFunction = vtk.vtkPlanes()
+	clipWidget.GetPlanes(clipFunction)
+
+	clipper = vtk.vtkClipPolyData()
+	clipper.SetClipFunction(clipFunction)
+	clipper.SetInputData(surface)
+	clipper.GenerateClippedOutputOn()
+	clipper.SetValue(0.0)
+	clipper.Update()
+
+	surface.DeepCopy(clipper.GetOutput())
+
+	writer.SetFileName(os.path.join(working_dir,"surface_clipped.stl"))
+	writer.SetInputData(surface)
+	writer.Update()
+
+	# clipping plane
 	point1 = []
 	point2 = []
 	origin = []
+	
 	for i in range(3):
 		point1.append(start_point[i]-start_point_normal[i]*math.sqrt(2)/2*5)
 		point2.append(start_point[i]+start_point_normal[i]*math.sqrt(2)/2*5)
 		origin.append(start_point[i]+start_point_binormal[i]*math.sqrt(2)/2*5)
+
+	planeSource = vtk.vtkPlaneSource()
+	planeSource.SetResolution(10,10)
+	planeSource.SetOrigin(origin)
+	planeSource.SetPoint1(point1)
+	planeSource.SetPoint2(point2)
+	planeSource.Update()
+
+	box = vtk.vtkPlanes()
+	points = vtk.vtkPoints()
+	points.InsertNextPoint(point1)
+	points.InsertNextPoint(point2)
+	points.InsertNextPoint(origin)
+
+	writer.SetFileName(os.path.join(working_dir,"clip_plane_1.stl"))
+	writer.SetInputData(planeSource.GetOutput())
+	writer.Update()
+
+	exit()
 
 	print(origin)
 	print(point1)
