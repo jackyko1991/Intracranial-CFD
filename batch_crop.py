@@ -7,6 +7,77 @@ data_dir = "D:/Dr_Simon_Yu/CFD_intracranial/data/comparison"
 binary_path = "D:/Dr_Simon_Yu/CFD_intracranial/code/cxx/Vessel-Centerline-Extraction/build/Release/CenterlineExtraction.exe"
 dist_from_defect = 20
 
+def clip_polydata_by_box(polydata, point, tangent, normal, binormal, size=[10,10,1]):
+	"""Clip the input polydata with given box shape and direction
+
+	Parameters:
+	polydata (polydata): Input polydata
+	point (array): Coordinate of clipping box center
+	normal (array): Direction tangent of the clipping box (major axis)
+	normal (array): Direction normal of the clipping box
+	normal (array): Direction binormal of the clipping box
+	size (array): Size of the clipping box (default: [10,10,1])
+
+	Returns:
+	vtkPolyData: Clipped polydata
+	vtkPolyData: Clipping box
+	vtkPolyData: Clipping plane
+	"""
+
+	# create a clipping box widget
+	clipWidget = vtk.vtkBoxWidget()
+	transform = vtk.vtkTransform()
+
+	transform.Translate(point)	
+	w = math.atan(math.sqrt(tangent[0]**2+tangent[1]**2)/tangent[2])*180/3.14
+	transform.RotateWXYZ(w, -tangent[1], tangent[0],0)
+	transform.Scale(size)
+	
+	# print(transform.GetMatrix())
+
+	clipBox = vtk.vtkCubeSource()
+	transformFilter = vtk.vtkTransformPolyDataFilter()
+	transformFilter.SetInputConnection(clipBox.GetOutputPort())
+	transformFilter.SetTransform(transform)
+	transformFilter.Update()
+
+	clipBoxPolyData = vtk.vtkPolyData()
+	clipBoxPolyData.DeepCopy(transformFilter.GetOutput())
+
+	clipWidget.SetTransform(transform)
+	clipFunction = vtk.vtkPlanes()
+	clipWidget.GetPlanes(clipFunction)
+
+	clipper = vtk.vtkClipPolyData()
+	clipper.SetClipFunction(clipFunction)
+	clipper.SetInputData(polydata)
+	clipper.GenerateClippedOutputOn()
+	clipper.SetValue(0.0)
+	clipper.Update()
+
+	polydata.DeepCopy(clipper.GetOutput())
+
+	# clipping plane
+	point1 = []
+	point2 = []
+	origin = []
+	
+	for i in range(3):
+		point1.append(point[i]-normal[i]*math.sqrt(2)/2*size[0])
+		point2.append(point[i]+normal[i]*math.sqrt(2)/2*size[0])
+		origin.append(point[i]+binormal[i]*math.sqrt(2)/2*size[0])
+
+	planeSource = vtk.vtkPlaneSource()
+	planeSource.SetResolution(10,10)
+	planeSource.SetOrigin(origin)
+	planeSource.SetPoint1(point1)
+	planeSource.SetPoint2(point2)
+	planeSource.Update()
+
+	clipPlanePolyData = vtk.vtkPolyData()
+	clipPlanePolyData.DeepCopy(planeSource.GetOutput())
+	return polydata, clipBoxPolyData, clipPlanePolyData
+
 def execute(working_dir):
 	# convert vtk to stl
 	reader = vtk.vtkGenericDataObjectReader()
@@ -42,10 +113,6 @@ def execute(working_dir):
 	kdTree.SetDataSet(centerline)
 	iD = kdTree.FindClosestPoint(defected_point)
 
-	# print(defected_point)
-	# print(centerline)
-	# print(centerline.GetPointData().GetArray("Abscissas").GetComponent(iD,0))
-
 	end_id = centerline.GetNumberOfPoints()-1
 
 	defected_point_absc = centerline.GetPointData().GetArray("Abscissas").GetComponent(iD,0)
@@ -69,81 +136,14 @@ def execute(working_dir):
 			start_point_normal = list(centerline.GetPointData().GetArray("FrenetNormal").GetTuple(i))
 			start_point_binormal = list(centerline.GetPointData().GetArray("FrenetBinormal").GetTuple(i))
 
-	# start_point_normal = [(-1*i) for i in start_point_normal]
-
 	print(start_id,start_point,start_point_tangent,start_point_normal,start_point_binormal)
 
-	# create a clipping box widget
-	clipWidget = vtk.vtkBoxWidget()
-	transform = vtk.vtkTransform()
-
-	transform.Translate(start_point[0],start_point[1],start_point[2])	
-	w = math.atan(math.sqrt(start_point_tangent[0]**2+start_point_tangent[1]**2)/start_point_tangent[2])*180/3.14
-	transform.RotateWXYZ(w, -start_point_tangent[1], start_point_tangent[0],0)
-	transform.Scale(10,10,1)
-	
-	print(transform.GetMatrix())
-
-	clipBox = vtk.vtkCubeSource()
-	transformFilter = vtk.vtkTransformPolyDataFilter()
-	transformFilter.SetInputConnection(clipBox.GetOutputPort())
-	transformFilter.SetTransform(transform)
-	transformFilter.Update()
-
-	writer.SetFileName(os.path.join(working_dir,"clip_box.stl"))
-	writer.SetInputData(transformFilter.GetOutput())
-	writer.Update()
-
-	clipWidget.SetTransform(transform)
-	clipFunction = vtk.vtkPlanes()
-	clipWidget.GetPlanes(clipFunction)
-
-	clipper = vtk.vtkClipPolyData()
-	clipper.SetClipFunction(clipFunction)
-	clipper.SetInputData(surface)
-	clipper.GenerateClippedOutputOn()
-	clipper.SetValue(0.0)
-	clipper.Update()
-
-	surface.DeepCopy(clipper.GetOutput())
-
-	writer.SetFileName(os.path.join(working_dir,"surface_clipped.stl"))
-	writer.SetInputData(surface)
-	writer.Update()
-
-	# clipping plane
-	point1 = []
-	point2 = []
-	origin = []
-	
-	for i in range(3):
-		point1.append(start_point[i]-start_point_normal[i]*math.sqrt(2)/2*5)
-		point2.append(start_point[i]+start_point_normal[i]*math.sqrt(2)/2*5)
-		origin.append(start_point[i]+start_point_binormal[i]*math.sqrt(2)/2*5)
-
-	planeSource = vtk.vtkPlaneSource()
-	planeSource.SetResolution(10,10)
-	planeSource.SetOrigin(origin)
-	planeSource.SetPoint1(point1)
-	planeSource.SetPoint2(point2)
-	planeSource.Update()
-
-	box = vtk.vtkPlanes()
-	points = vtk.vtkPoints()
-	points.InsertNextPoint(point1)
-	points.InsertNextPoint(point2)
-	points.InsertNextPoint(origin)
-
-	writer.SetFileName(os.path.join(working_dir,"clip_plane_1.stl"))
-	writer.SetInputData(planeSource.GetOutput())
-	writer.Update()
-
-	exit()
-
-	print(origin)
-	print(point1)
-	print(point2)
-	
+	clipBoxes = [] 
+	clipPlanes = []
+	surface, clipBox, clipPlane = clip_polydata_by_box(surface, start_point, start_point_tangent, start_point_normal, start_point_binormal)
+	centerline, _ , _ = clip_polydata_by_box(centerline, start_point, start_point_tangent, start_point_normal, start_point_binormal)
+	clipBoxes.append(clipBox)
+	clipPlanes.append(clipPlane)
 
 	# find end points
 	# split the polydata by centerline id
@@ -197,41 +197,52 @@ def execute(working_dir):
 				end_points_normal.append(end_point_normal)
 				end_points_binormal.append(end_point_binormal)
 
-
 	for i in range(len(end_ids)):
 		print(end_ids[i],end_points[i],end_points_tangent[i],end_points_normal[i],end_points_binormal[i])
+		surface, clipBox, clipPlane = clip_polydata_by_box(surface, end_points[i], end_points_tangent[i], end_points_normal[i], end_points_binormal[i])
+		centerline, _ , _ = clip_polydata_by_box(centerline, end_points[i], end_points_tangent[i], end_points_normal[i], end_points_binormal[i])
 
-	# # clip the surface
-	# plane = vtk.vtkPlane()
-	# plane.SetOrigin(start_point)
-	# plane.SetNormal(start_point_normal)
+		clipBoxes.append(clipBox)
+		clipPlanes.append(clipPlane)
 
-	# clipper = vtk.vtkClipPolyData()
-	# clipper.SetClipFunction(plane)
-	# clipper.SetInputData(surface)
-	# # clipper.Update()
+	# connected component calculation on surface and centerline
+	connectedFilter = vtk.vtkConnectivityFilter()
+	# connectedFilter.SetExtractionModeToAllRegions()
+	# connectedFilter.ColorRegionsOn()
+	connectedFilter.SetExtractionModeToClosestPointRegion()
+	connectedFilter.SetClosestPoint(defected_point)
+	connectedFilter.SetInputData(surface)
+	connectedFilter.Update()
+	surface.DeepCopy(connectedFilter.GetOutput())
 
-	# # surface.DeepCopy(clipper.GetOutput())
+	# output
+	vtpWriter = vtk.vtkXMLPolyDataWriter()
+	vtpWriter.SetFileName(os.path.join(working_dir,"surface_clipped.vtp"))
+	vtpWriter.SetInputData(surface)
+	vtpWriter.Update()
 
-	# clipper.InsideOutOn()
-	# for i in range(len(end_ids)):
-	# 	if i == 0:
-	# 		continue
-	# 	plane.SetOrigin(end_points[i])
-	# 	plane.SetNormal(end_points_normal[i])
+	connectedFilter.SetInputData(centerline)
+	connectedFilter.Update()
+	centerline.DeepCopy(connectedFilter.GetOutput())
 
-	# 	clipper.SetClipFunction(plane)
-	# 	clipper.SetInputData(surface)
-	# 	clipper.Update()
+	vtpWriter.SetFileName(os.path.join(working_dir,"centerline_clipped.vtp"))
+	vtpWriter.SetInputData(centerline)
+	vtpWriter.Update()
 
-	# 	surface.DeepCopy(clipper.GetOutput())
+	for i in range(len(clipBoxes)):
+		writer.SetFileName(os.path.join(working_dir,"clip_box_" + str(i) + ".stl"))
+		writer.SetInputData(clipBoxes[i])
+		writer.Update()
 
-	# writer.SetFileName(os.path.join(working_dir,"surface_clipped.stl"))
-	# writer.SetInputData(surface)
-	# writer.Update()
+		writer.SetFileName(os.path.join(working_dir,"clip_plane_" + str(i) + ".stl"))
+		writer.SetInputData(clipPlanes[i])
+		writer.Update()
+
+	# prepare surface for mesh generation
+
 
 def main():
-	for case in os.listdir(data_dir)[1:]:
+	for case in os.listdir(data_dir)[0:]:
 		print(case)
 		execute(os.path.join(data_dir,case,"3DRA"))
 		exit()
