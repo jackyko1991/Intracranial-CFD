@@ -7,8 +7,10 @@ import numpy as np
 data_dir = "Z:/data/intracranial/followup/medical"
 binary_path = "D:/projects/CFD_intracranial/cxx/Vessel-Centerline-Extraction/build/Release/CenterlineExtraction.exe"
 dist_from_bif = 20
+smooth_relaxation_3DRA = 0.1
+smooth_relaxation_CBCT = 0.2
 
-def clip_polydata_by_box(polydata, point, tangent, normal, binormal, size=[10,10,1]):
+def clip_polydata_by_box(polydata, point, tangent, normal, binormal, size=[10,10,1], capping=True):
 	"""Clip the input polydata with given box shape and direction
 
 	Parameters:
@@ -58,6 +60,35 @@ def clip_polydata_by_box(polydata, point, tangent, normal, binormal, size=[10,10
 
 	polydata.DeepCopy(clipper.GetOutput())
 
+	if capping:
+		# extract feature edges
+		boundaryEdges = vtk.vtkFeatureEdges()
+		boundaryEdges.SetInputData(polydata)
+		boundaryEdges.BoundaryEdgesOn()
+		boundaryEdges.FeatureEdgesOff()
+		boundaryEdges.NonManifoldEdgesOff()
+		boundaryEdges.ManifoldEdgesOff()
+		boundaryEdges.Update()
+
+		boundaryStrips = vtk.vtkStripper()
+		boundaryStrips.SetInputData(boundaryEdges.GetOutput())
+		boundaryStrips.Update()
+
+		# Change the polylines into polygons
+		boundaryPoly = vtk.vtkPolyData()
+		boundaryPoly.SetPoints(boundaryStrips.GetOutput().GetPoints())
+		boundaryPoly.SetPolys(boundaryStrips.GetOutput().GetLines())
+
+		appendFilter = vtk.vtkAppendPolyData()
+		appendFilter.AddInputData(polydata)
+		appendFilter.AddInputData(boundaryPoly)
+		appendFilter.Update()
+
+		cleaner = vtk.vtkCleanPolyData()
+		cleaner.SetInputData(appendFilter.GetOutput())
+		cleaner.Update()
+		polydata.DeepCopy(cleaner.GetOutput())
+
 	# clipping plane
 	point1 = []
 	point2 = []
@@ -79,7 +110,7 @@ def clip_polydata_by_box(polydata, point, tangent, normal, binormal, size=[10,10
 	clipPlanePolyData.DeepCopy(planeSource.GetOutput())
 	return polydata, clipBoxPolyData, clipPlanePolyData
 
-def centerlineCalculation(working_dir):
+def centerlineCalculation(working_dir, relaxation = 0):
 	if not os.path.exists(os.path.join(working_dir,"surface.vtk")):
 		return
 
@@ -89,6 +120,16 @@ def centerlineCalculation(working_dir):
 	reader.Update()
 	surface = reader.GetOutput()
 	
+	if relaxation > 0:
+		smoothFilter = vtk.vtkSmoothPolyDataFilter()
+		smoothFilter.SetInputData(surface)
+		smoothFilter.SetNumberOfIterations(100)
+		smoothFilter.SetRelaxationFactor(relaxation)
+		smoothFilter.FeatureEdgeSmoothingOff()
+		smoothFilter.BoundarySmoothingOn()
+		smoothFilter.Update()
+		surface.DeepCopy(smoothFilter.GetOutput())
+
 	writer = vtk.vtkSTLWriter()
 	writer.SetFileName(os.path.join(working_dir,"surface.stl"))
 	writer.SetInputData(surface)
@@ -118,10 +159,11 @@ def normalizeVessels(case_dir):
 		centerlines.update({phase: centerline})
 
 		# load surface files
-		if not os.path.exists(os.path.join(case_dir,phase,"surface.vtk")):
+		if not os.path.exists(os.path.join(case_dir,phase,"surface.stl")):
 			continue
-		reader = vtk.vtkGenericDataObjectReader()
-		reader.SetFileName(os.path.join(case_dir,phase,"surface.vtk"))
+		# reader = vtk.vtkGenericDataObjectReader()
+		reader = vtk.vtkSTLReader()
+		reader.SetFileName(os.path.join(case_dir,phase,"surface.stl"))
 		reader.Update()
 		surface = reader.GetOutput()
 		surfaces.update({phase: surface})
@@ -264,14 +306,14 @@ def normalizeVessels(case_dir):
 		clipBoxes_ = []
 		clipPlanes_ = []
 
-		surface, clipBox, clipPlane = clip_polydata_by_box(surface, start_point, start_point_tangent, start_point_normal, start_point_binormal, size=[20,20,0.5])
+		surface, clipBox, clipPlane = clip_polydata_by_box(surface, start_point, start_point_tangent, start_point_normal, start_point_binormal, size=[15,15,1])
 
 		clipBoxes_.append(clipBox)
 		clipPlanes_.append(clipPlane)
 
 		for i in range(len(end_ids)):
 			# print(end_ids[i],end_points[i],end_points_tangent[i],end_points_normal[i],end_points_binormal[i])
-			surface, clipBox, clipPlane = clip_polydata_by_box(surface, end_points[i], end_points_tangent[i], end_points_normal[i], end_points_binormal[i], size=[20,20,0.5])
+			surface, clipBox, clipPlane = clip_polydata_by_box(surface, end_points[i], end_points_tangent[i], end_points_normal[i], end_points_binormal[i], size=[15,15,1])
 			clipBoxes_.append(clipBox)
 			clipPlanes_.append(clipPlane)
 
@@ -301,13 +343,11 @@ def normalizeVessels(case_dir):
 		vtpWriter.SetFileName(os.path.join(case_dir,key,"surface_clipped.vtp"))
 		vtpWriter.SetInputData(value)
 		vtpWriter.Update()
-		print("surface_clipped",key)
 
 	for key, value in centerlines_clipped.items():
 		vtpWriter.SetFileName(os.path.join(case_dir,key,"centerline_clipped.vtp"))
 		vtpWriter.SetInputData(value)
 		vtpWriter.Update()
-		print("hello",key)
 
 	writer = vtk.vtkSTLWriter()
 	for key, value in clipBoxes.items():
@@ -336,8 +376,13 @@ def main():
 	dataList = os.listdir(data_dir)[0:]
 
 	for case in dataList:
-		# for phase in phases:
-			# centerlineCalculation(os.path.join(data_dir,case,phase))
+		for phase in phases:
+			if phase == "followup":
+				continue
+				centerlineCalculation(os.path.join(data_dir,case,phase),relaxation=smooth_relaxation_CBCT)
+			else:
+				continue
+				centerlineCalculation(os.path.join(data_dir,case,phase),relaxation=smooth_relaxation_3DRA)
 
 		normalizeVessels(os.path.join(data_dir,case))
 
