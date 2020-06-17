@@ -1,6 +1,7 @@
 import os
 import SimpleITK as sitk
 import vtk
+from tqdm import tqdm
 
 def ExtractLargestConnectedComponents(label):
 	ccFilter = sitk.ConnectedComponentImageFilter()
@@ -102,11 +103,11 @@ def ExtractCBCT(img_path,vessel_path):
 	writer.SetFileName(vessel_path)
 	writer.Execute(vessel_seg)
 
-def LabelToSurface(label_path, surface_path, lcc=False):
+def LabelToSurface(label_path, surface_path, lcc=False, smoothIterations=15,relaxationFactor=0.1):
 	print("Converting segmentation label to surface file:",label_path)
 
 	# binary path
-	bin_path = "D:/Dr_Simon_Yu/CFD_intracranial/code/cxx/label_to_mesh/build/Release/LabelToMesh.exe"
+	bin_path = "D:/projects/CFD_intracranial/cxx/label_to_mesh/build/Release/LabelToMesh.exe"
 
 	# convert to binary file
 	command = bin_path + " " + label_path + " " + surface_path + " 1 1"
@@ -129,8 +130,8 @@ def LabelToSurface(label_path, surface_path, lcc=False):
 
 	smoothFilter = vtk.vtkSmoothPolyDataFilter()
 	smoothFilter.SetInputData(surface)
-	smoothFilter.SetNumberOfIterations(15);
-	smoothFilter.SetRelaxationFactor(0.1);
+	smoothFilter.SetNumberOfIterations(smoothIterations);
+	smoothFilter.SetRelaxationFactor(relaxationFactor);
 	smoothFilter.FeatureEdgeSmoothingOff();
 	smoothFilter.BoundarySmoothingOn();
 	smoothFilter.Update();
@@ -196,16 +197,41 @@ def crop_defected_region(image_path, defected_point_csv_path, cropped_image_path
 	writer.Execute(image)
 
 def main():
-	data_folder = "D:/Dr_Simon_Yu/CFD_intracranial/data/comparison/BlasiRaquelLegaspi"
+	data_folder = "Z:/data/intracranial/followup"
+	tx_types = ["medical","stent"]
+	phases = ["baseline","baseline-post","12months","followup"]
+	label_filename = "3DRA_seg_ICA_terminus.nii.gz"
+	lcc_label_filename_3DRA = "3DRA_seg_ICA_terminus_lcc.nii.gz"
+	lcc_label_filename_CBCT = "CBCT_seg_ICA_terminus_lcc.nii.gz"
 
-	# Extract3DRA(data_folder + "baseline/3DRA.nii",data_folder + "baseline/seg_vessel.nii")
-	# Extract3DRA(data_folder + "baseline-post/3DRA.nii",data_folder + "baseline-post/seg_vessel.nii")
-	# Extract3DRA(data_folder + "12months/3DRA.nii",data_folder + "12months/seg_vessel.nii")
-	# ExtractCBCT(data_folder + "followup/CBCT.nii",data_folder + "followup/seg_vessel.nii")
-	# LabelToSurface(os.path.join(data_folder,"3DRA_seg.nii.gz"), os.path.join(data_folder,"surface.vtk"))
-	crop_defected_region(os.path.join(data_folder,"3DRA","3DRA.nii"), os.path.join(data_folder,"defected_point.fcsv"),os.path.join(data_folder,"3DRA","3DRA_cropped.nii.gz"))
-	# crop_defected_region(os.path.join(data_folder,"3DRA","3DRA_seg.nii.gz"), os.path.join(data_folder,"defected_point.fcsv"),os.path.join(data_folder,"3DRA","3DRA_seg_cropped.nii.gz"))
-	crop_defected_region(os.path.join(data_folder,"CBCT","CBCT_reg.nii"), os.path.join(data_folder,"defected_point.fcsv"),os.path.join(data_folder,"CBCT","CBCT_reg_cropped.nii.gz"))
+	output_surface_name = "surface.vtk"
+
+	for tx_type in tx_types:
+		pbar = tqdm(os.listdir(os.path.join(data_folder,tx_type)))
+
+		for case in pbar:
+			pbar.set_description(case)
+
+			for phase in phases:
+				if phase == "followup":
+					label_file = os.path.join(data_folder,tx_type,case, phase, lcc_label_filename_CBCT)
+				else:
+					label_file = os.path.join(data_folder,tx_type,case, phase, lcc_label_filename_3DRA)
+				if not os.path.exists(label_file):
+					continue
+				output_surface = os.path.join(data_folder,tx_type,case, phase, output_surface_name)
+
+				# Extract3DRA(data_folder + "baseline/3DRA.nii",data_folder + "baseline/seg_vessel.nii")
+				# Extract3DRA(data_folder + "baseline-post/3DRA.nii",data_folder + "baseline-post/seg_vessel.nii")
+				# Extract3DRA(data_folder + "12months/3DRA.nii",data_folder + "12months/seg_vessel.nii")
+				# ExtractCBCT(data_folder + "followup/CBCT.nii",data_folder + "followup/seg_vessel.nii")
+				if phase=="followup":
+					LabelToSurface(label_file, output_surface,relaxationFactor=0.5)
+				else:
+					LabelToSurface(label_file, output_surface,relaxationFactor=0.1)
+				# crop_defected_region(os.path.join(data_folder,"3DRA","3DRA.nii"), os.path.join(data_folder,"defected_point.fcsv"),os.path.join(data_folder,"3DRA","3DRA_cropped.nii.gz"))
+				# crop_defected_region(os.path.join(data_folder,"3DRA","3DRA_seg.nii.gz"), os.path.join(data_folder,"defected_point.fcsv"),os.path.join(data_folder,"3DRA","3DRA_seg_cropped.nii.gz"))
+				# crop_defected_region(os.path.join(data_folder,"CBCT","CBCT_reg.nii"), os.path.join(data_folder,"defected_point.fcsv"),os.path.join(data_folder,"CBCT","CBCT_reg_cropped.nii.gz"))
 
 if __name__ == "__main__":
     main()
