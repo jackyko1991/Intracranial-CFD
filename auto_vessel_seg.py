@@ -198,7 +198,8 @@ def crop_defected_region(image_path, defected_point_csv_path, cropped_image_path
 
 def main():
 	data_folder = "Z:/data/intracranial/followup"
-	tx_types = ["medical","stent"]
+	# tx_types = ["medical","stent"]
+	tx_types = ["medical"]
 	phases = ["baseline","baseline-post","12months","followup"]
 	label_filename = "3DRA_seg_ICA_terminus.nii.gz"
 	lcc_label_filename_3DRA = "3DRA_seg_ICA_terminus_lcc.nii.gz"

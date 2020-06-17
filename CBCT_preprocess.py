@@ -64,16 +64,16 @@ def preprocess(src,tgt):
 	writer.Execute(label)
 
 def main():
-	data_dir = "F:/intracranial/3DRA"
+	data_dir = "Z:/data/intracranial/followup_flatten/CBCT"
 	pbar = tqdm(os.listdir(data_dir))
 
-	cases = ["stent_ChanT_baseline","stent_ChanT_12months","stent_ChanT_baseline-post"]
+	cases = ["medical_LoCH_followup","medical_MokKP_followup"]
 
 	for case in pbar:
 		if not case in cases:
 			continue
 		pbar.set_description(case)
-		preprocess(os.path.join(data_dir,case, "3DRA_seg_ICA_terminus.nii.gz"),os.path.join(data_dir,case, "3DRA_seg_ICA_terminus_lcc.nii.gz"))
+		preprocess(os.path.join(data_dir,case, "3DRA_seg_ICA_terminus.nii.gz"),os.path.join(data_dir,case, "CBCT_seg_ICA_terminus_lcc.nii.gz"))
 		# exit()
 
 if __name__ == "__main__":

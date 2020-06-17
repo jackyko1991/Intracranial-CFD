@@ -9,6 +9,8 @@ binary_path = "D:/projects/CFD_intracranial/cxx/Vessel-Centerline-Extraction/bui
 dist_from_bif = 20
 smooth_relaxation_3DRA = 0.1
 smooth_relaxation_CBCT = 0.2
+batch_centerline = False
+batch_clip = True
 
 def clip_polydata_by_box(polydata, point, tangent, normal, binormal, size=[10,10,1], capping=True):
 	"""Clip the input polydata with given box shape and direction
@@ -171,7 +173,7 @@ def normalizeVessels(case_dir):
 	# get the bifurcation point from baseline data
 	# split the polydata by centerline id
 	splitter = vtk.vtkThreshold()
-	splitter.SetInputData(centerlines['baseline'])
+	splitter.SetInputData(centerlines["baseline"])
 	splitter.ThresholdBetween(0,0)
 	splitter.SetInputArrayToProcess(0,0,0,vtk.vtkDataObject.FIELD_ASSOCIATION_CELLS,"GroupIds")
 	splitter.Update()
@@ -209,13 +211,13 @@ def normalizeVessels(case_dir):
 		splitter.ThresholdBetween(2,2)
 		splitter.Update()
 		ACA = splitter.GetOutput()
-		endPoint1_absc_list.update({key: ACA.GetPointData().GetArray("Abscissas").GetComponent(ACA.GetNumberOfPoints()-1,0)})
+		endPoint1_absc_list.update({key: ACA.GetPointData().GetArray("Abscissas").GetComponent(ACA.GetNumberOfPoints()-1,0) - bifPoint_absc_list[key]})
 		endPoint1_id_list.update({key: ACA.GetNumberOfPoints()-1})
 
 		splitter.ThresholdBetween(3,3)
 		splitter.Update()
 		MCA = splitter.GetOutput()
-		endPoint2_absc_list.update({key: ACA.GetPointData().GetArray("Abscissas").GetComponent(MCA.GetNumberOfPoints()-1,0)})
+		endPoint2_absc_list.update({key: ACA.GetPointData().GetArray("Abscissas").GetComponent(MCA.GetNumberOfPoints()-1,0) - bifPoint_absc_list[key]})
 		endPoint2_id_list.update({key: ACA.GetNumberOfPoints()-1})
 
 	# get the start point coordinate
@@ -257,15 +259,20 @@ def normalizeVessels(case_dir):
 		splitter.Update()
 		splitted_centerline = splitter.GetOutput()
 
-		for i in range(splitted_centerline.GetNumberOfPoints()):
-			end_id = splitted_centerline.GetNumberOfPoints()-1
-			end_point_absc = splitted_centerline.GetPointData().GetArray("Abscissas").GetComponent(splitted_centerline.GetNumberOfPoints()-1,0)
-			end_point = list(splitted_centerline.GetPoints().GetPoint(splitted_centerline.GetNumberOfPoints()-1))
-			end_point_tangent = list(splitted_centerline.GetPointData().GetArray("FrenetTangent").GetTuple(splitted_centerline.GetNumberOfPoints()-1))
-			end_point_normal = list(splitted_centerline.GetPointData().GetArray("FrenetNormal").GetTuple(splitted_centerline.GetNumberOfPoints()-1))
-			end_point_binormal = list(splitted_centerline.GetPointData().GetArray("FrenetBinormal").GetTuple(splitted_centerline.GetNumberOfPoints()-1))
+		end_id = splitted_centerline.GetNumberOfPoints()-1
+		end_point_absc = splitted_centerline.GetPointData().GetArray("Abscissas").GetComponent(splitted_centerline.GetNumberOfPoints()-1,0)
+		end_point = list(splitted_centerline.GetPoints().GetPoint(splitted_centerline.GetNumberOfPoints()-1))
+		end_point_tangent = list(splitted_centerline.GetPointData().GetArray("FrenetTangent").GetTuple(splitted_centerline.GetNumberOfPoints()-1))
+		end_point_normal = list(splitted_centerline.GetPointData().GetArray("FrenetNormal").GetTuple(splitted_centerline.GetNumberOfPoints()-1))
+		end_point_binormal = list(splitted_centerline.GetPointData().GetArray("FrenetBinormal").GetTuple(splitted_centerline.GetNumberOfPoints()-1))
 
-			if (splitter.GetOutput().GetPointData().GetArray("Abscissas").GetComponent(i,0) < min(endPoint1_absc_list.values())) and \
+		for i in range(splitted_centerline.GetNumberOfPoints()):
+			if groupId == 2:
+				endPoint_absc_list = endPoint1_absc_list.values()
+			else:
+				endPoint_absc_list = endPoint2_absc_list.values()
+
+			if (splitter.GetOutput().GetPointData().GetArray("Abscissas").GetComponent(i,0)-bifPoint_absc_list["baseline"]< min(endPoint_absc_list)) and \
 				(splitter.GetOutput().GetPointData().GetArray("Abscissas").GetComponent(i,0)-bifPoint_absc_list["baseline"] < dist_from_bif):
 				end_id = i
 				end_point_absc = splitted_centerline.GetPointData().GetArray("Abscissas").GetComponent(i,0)
@@ -273,6 +280,7 @@ def normalizeVessels(case_dir):
 				end_point_tangent = list(splitted_centerline.GetPointData().GetArray("FrenetTangent").GetTuple(i))
 				end_point_normal = list(splitted_centerline.GetPointData().GetArray("FrenetNormal").GetTuple(i))
 				end_point_binormal = list(splitted_centerline.GetPointData().GetArray("FrenetBinormal").GetTuple(i))
+
 			else:
 				end_ids.append(end_id)
 				end_points.append(end_point)
@@ -306,14 +314,33 @@ def normalizeVessels(case_dir):
 		clipBoxes_ = []
 		clipPlanes_ = []
 
-		surface, clipBox, clipPlane = clip_polydata_by_box(surface, start_point, start_point_tangent, start_point_normal, start_point_binormal, size=[15,15,1])
+		kdTree = vtk.vtkKdTreePointLocator()
+		kdTree.SetDataSet(centerlines[key])
+		iD = kdTree.FindClosestPoint(start_point)
+		kdTree.Update()
+
+		start_point_ = list(centerlines[key].GetPoint(iD))
+		start_point_tangent_ = list(centerlines[key].GetPointData().GetArray("FrenetTangent").GetTuple(iD))
+		start_point_normal_ = list(centerlines[key].GetPointData().GetArray("FrenetNormal").GetTuple(iD))
+		start_point_binormal_ = list(centerlines[key].GetPointData().GetArray("FrenetBinormal").GetTuple(iD))
+
+		surface, clipBox, clipPlane = clip_polydata_by_box(surface, start_point_, start_point_tangent_, start_point_normal_, start_point_binormal_, size=[15,15,1])
 
 		clipBoxes_.append(clipBox)
 		clipPlanes_.append(clipPlane)
 
-		for i in range(len(end_ids)):
-			# print(end_ids[i],end_points[i],end_points_tangent[i],end_points_normal[i],end_points_binormal[i])
-			surface, clipBox, clipPlane = clip_polydata_by_box(surface, end_points[i], end_points_tangent[i], end_points_normal[i], end_points_binormal[i], size=[15,15,1])
+		for i in range(len(end_points)):
+			kdTree = vtk.vtkKdTreePointLocator()
+			kdTree.SetDataSet(centerlines[key])
+			iD = kdTree.FindClosestPoint(end_points[i])
+			kdTree.Update()
+
+			end_point_ = list(centerlines[key].GetPoint(iD))
+			end_point_tangent_ = list(centerlines[key].GetPointData().GetArray("FrenetTangent").GetTuple(iD))
+			end_point_normal_ = list(centerlines[key].GetPointData().GetArray("FrenetNormal").GetTuple(iD))
+			end_point_binormal_ = list(centerlines[key].GetPointData().GetArray("FrenetBinormal").GetTuple(iD))
+
+			surface, clipBox, clipPlane = clip_polydata_by_box(surface, end_point_, end_point_tangent_, end_point_normal_, end_point_binormal_, size=[10,10,1])
 			clipBoxes_.append(clipBox)
 			clipPlanes_.append(clipPlane)
 
@@ -325,11 +352,30 @@ def normalizeVessels(case_dir):
 		surfaces_clipped.update({key: surface})
 
 	for key,centerline in centerlines.items():
-		centerline, _ , _ = clip_polydata_by_box(centerline, start_point, start_point_tangent, start_point_normal, start_point_binormal)
+		kdTree = vtk.vtkKdTreePointLocator()
+		kdTree.SetDataSet(centerlines[key])
+		iD = kdTree.FindClosestPoint(start_point)
+		kdTree.Update()
+
+		start_point_ = list(centerlines[key].GetPoint(iD))
+		start_point_tangent_ = list(centerlines[key].GetPointData().GetArray("FrenetTangent").GetTuple(iD))
+		start_point_normal_ = list(centerlines[key].GetPointData().GetArray("FrenetNormal").GetTuple(iD))
+		start_point_binormal_ = list(centerlines[key].GetPointData().GetArray("FrenetBinormal").GetTuple(iD))
+
+		centerline, _ , _ = clip_polydata_by_box(centerline, start_point_, start_point_tangent_, start_point_normal_, start_point_binormal_, size=[15,15,1])
 
 		for i in range(len(end_ids)):
-			# print(end_ids[i],end_points[i],end_points_tangent[i],end_points_normal[i],end_points_binormal[i])
-			centerline, _ , _ = clip_polydata_by_box(centerline, end_points[i], end_points_tangent[i], end_points_normal[i], end_points_binormal[i])
+			kdTree = vtk.vtkKdTreePointLocator()
+			kdTree.SetDataSet(centerlines[key])
+			iD = kdTree.FindClosestPoint(end_points[i])
+			kdTree.Update()
+
+			end_point_ = list(centerlines[key].GetPoint(iD))
+			end_point_tangent_ = list(centerlines[key].GetPointData().GetArray("FrenetTangent").GetTuple(iD))
+			end_point_normal_ = list(centerlines[key].GetPointData().GetArray("FrenetNormal").GetTuple(iD))
+			end_point_binormal_ = list(centerlines[key].GetPointData().GetArray("FrenetBinormal").GetTuple(iD))
+
+			centerline, _ , _ = clip_polydata_by_box(centerline, end_point_, end_point_tangent_, end_point_normal_, end_point_binormal_, size=[10,10,1])
 
 		connectedFilter.SetInputData(centerline)
 		connectedFilter.Update()
@@ -377,16 +423,16 @@ def main():
 
 	for case in dataList:
 		for phase in phases:
-			if phase == "followup":
-				continue
-				centerlineCalculation(os.path.join(data_dir,case,phase),relaxation=smooth_relaxation_CBCT)
-			else:
-				continue
-				centerlineCalculation(os.path.join(data_dir,case,phase),relaxation=smooth_relaxation_3DRA)
+			if batch_centerline:
+				if phase == "followup":
+					# continue
+					centerlineCalculation(os.path.join(data_dir,case,phase),relaxation=smooth_relaxation_CBCT)
+				else:
+					# continue
+					centerlineCalculation(os.path.join(data_dir,case,phase),relaxation=smooth_relaxation_3DRA)
 
-		normalizeVessels(os.path.join(data_dir,case))
-
-		exit()
+		if batch_clip:
+			normalizeVessels(os.path.join(data_dir,case))
 
 if __name__=="__main__":
 	main()
