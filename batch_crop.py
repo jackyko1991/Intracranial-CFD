@@ -282,7 +282,7 @@ def normalizeVessels(case_dir):
 		clipPlanes.update({key: clipPlanes_})
 		surfaces_clipped.update({key: surface})
 
-	for centerline in centerlines.values():
+	for key,centerline in centerlines.items():
 		centerline, _ , _ = clip_polydata_by_box(centerline, start_point, start_point_tangent, start_point_normal, start_point_binormal)
 
 		for i in range(len(end_ids)):
@@ -301,11 +301,13 @@ def normalizeVessels(case_dir):
 		vtpWriter.SetFileName(os.path.join(case_dir,key,"surface_clipped.vtp"))
 		vtpWriter.SetInputData(value)
 		vtpWriter.Update()
+		print("surface_clipped",key)
 
 	for key, value in centerlines_clipped.items():
 		vtpWriter.SetFileName(os.path.join(case_dir,key,"centerline_clipped.vtp"))
 		vtpWriter.SetInputData(value)
 		vtpWriter.Update()
+		print("hello",key)
 
 	writer = vtk.vtkSTLWriter()
 	for key, value in clipBoxes.items():
