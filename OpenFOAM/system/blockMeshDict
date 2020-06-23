@@ -1,9 +1,9 @@
 /*--------------------------------*- C++ -*----------------------------------*\
-  =========                 |
-  \\      /  F ield         | OpenFOAM: The Open Source CFD Toolbox
-   \\    /   O peration     | Website:  https://openfoam.org
-    \\  /    A nd           | Version:  7
-     \\/     M anipulation  |
+| =========                 |                                                 |
+| \\      /  F ield         | OpenFOAM: The Open Source CFD Toolbox           |
+|  \\    /   O peration     | Version:  2.3.0                                 |
+|   \\  /    A nd           | Web:      www.OpenFOAM.org                      |
+|    \\/     M anipulation  |                                                 |
 \*---------------------------------------------------------------------------*/
 FoamFile
 {
@@ -14,62 +14,76 @@ FoamFile
 }
 // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
 
-convertToMeters 0.1;
+convertToMeters 0.001;
 
 vertices
 (
-    (0 0 0)
-    (1 0 0)
-    (1 1 0)
-    (0 1 0)
-    (0 0 0.1)
-    (1 0 0.1)
-    (1 1 0.1)
-    (0 1 0.1)
-);
-
-blocks
-(
-    hex (0 1 2 3 4 5 6 7) (20 20 1) simpleGrading (1 1 1)
+	(-18.5 -40 -55)
+	(-2.5 -40 -55)
+	(-2.5 -21.4 -55)
+	(-18.5 -21.4 -55)
+	(-18.5 -40 -29)
+	(-2.5 -40 -29)
+	(-2.5 -21.4 -29)
+	(-18.5 -21.4 -29)
 );
 
 edges
 (
 );
 
+blocks
+(
+	hex (0 1 2 3 4 5 6 7) // vertex numbers
+	(20 20 20)	//number of cells in each direction
+	simpleGrading (1 1 1) // cell expansion ratios
+);
+
 boundary
 (
-    movingWall
-    {
-        type wall;
-        faces
-        (
-            (3 7 6 2)
-        );
-    }
-    fixedWalls
-    {
-        type wall;
-        faces
-        (
-            (0 4 7 3)
-            (2 6 5 1)
-            (1 5 4 0)
-        );
-    }
-    frontAndBack
-    {
-        type empty;
-        faces
-        (
-            (0 3 2 1)
-            (4 5 6 7)
-        );
-    }
-);
+	frontAndBack	// patch name
+	{
+		type slip;	// patch type
+		faces
+		(
+			(3 7 6 2)	// block face in this patch
+			(1 5 4 0)
+		);
+	}
 
-mergePatchPairs
-(
-);
+	leftWall
+	{
+		type slip;
+		faces
+		(
+			(0 4 7 3)
+		);
+	}
 
-// ************************************************************************* //
+	rightWall
+	{
+		type slip;
+		faces
+		(
+			(2 6 5 1)
+		);
+	}
+	
+	topWall
+	{
+		type slip;
+		faces
+		(
+			(0 3 2 1)
+		);
+	}
+
+	bottomWall
+	{
+		type slip;
+		faces
+		(
+			(4 5 6 7)
+		);
+	}
+);
