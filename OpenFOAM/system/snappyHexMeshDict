@@ -16,8 +16,8 @@ FoamFile
 
 // Which of the steps to run
 castellatedMesh true;
-snap false;
-addLayers false;
+snap true;
+addLayers true;
 
 // Geometry. Define of all surfaces. All surfaces are of class searchableSurface.
 // Surfaces are used
@@ -117,7 +117,7 @@ castellatedMeshControls
 	{
 		vessel.stl // STL filename where all the regions are added
 		{
-			level (2 2);
+			level (2 2); // default (min max) refinement for whole surface
 			// regions
 			// {
 				// zone0 // Named region in the STL file
@@ -160,11 +160,11 @@ castellatedMeshControls
 	// Mesh selection
 	// ~~~~~~~~~~~~~~
 
-	// After refinement patches get added fro all refinementSurfaces and all cells intersecting the surfaces get put into these patches.
+	// After refinement patches get added for all refinementSurfaces and all cells intersecting the surfaces get put into these patches.
 	// The section reachable from the locationInMesh is kept.
 	// NOTE: This point should never be on a face, always inside a cell, even after refinement
+	// Recommended this point to be the bifurcation point of the ICA terminus, unit in meter.
 	locationInMesh (-0.0097 -0.02952 -0.0394567);
-	// locationInMesh (-9.7 -29.52 -39.4567);
 
 	// Whether any faceZones (as specified in the refinementSurfaces) are only on the boundary of corresponding cellZones or also allow free-standing
 	// zone faces. Not used if there are no faceZones.
@@ -245,14 +245,10 @@ addLayersControls
 	// - angle to nearest surface < slipFeatureAngle (see below)
 	layers
 	{
-	    // "flange_.*"
-	    // {
-	    //     nSurfaceLayers 1;
-	    // }
-	    vesselWall
-	    {
-	    	nSurfaceLayers 2;
-	    }
+		"vessel.stl_.*"
+		{
+		    nSurfaceLayers 2;
+		}
 	    maxY
 	    {
 	    	nSurfaceLayers 2;
