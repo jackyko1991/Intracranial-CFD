@@ -6,11 +6,13 @@ import numpy as np
 
 data_dir = "Z:/data/intracranial/followup/medical"
 binary_path = "D:/projects/CFD_intracranial/cxx/Vessel-Centerline-Extraction/build/Release/CenterlineExtraction.exe"
-dist_from_bif = 20
+dist_from_bif_inlet = 35
+dist_from_bif_outlet = 25
 smooth_relaxation_3DRA = 0.1
 smooth_relaxation_CBCT = 0.2
 batch_centerline = False
 batch_clip = True
+capping = True
 
 def clip_polydata_by_box(polydata, point, tangent, normal, binormal, size=[10,10,1], capping=True):
 	"""Clip the input polydata with given box shape and direction
@@ -230,7 +232,7 @@ def normalizeVessels(case_dir):
 
 	for i in range(centerlines["baseline"].GetNumberOfPoints()):
 		if (bifPoint_absc_list["baseline"] - centerlines["baseline"].GetPointData().GetArray("Abscissas").GetComponent(i,0) < min(bifPoint_absc_list.values())) and \
-			(bifPoint_absc_list["baseline"] - centerlines["baseline"].GetPointData().GetArray("Abscissas").GetComponent(i,0) < dist_from_bif):
+			(bifPoint_absc_list["baseline"] - centerlines["baseline"].GetPointData().GetArray("Abscissas").GetComponent(i,0) < dist_from_bif_inlet):
 			break
 		else:
 			start_id = i
@@ -273,7 +275,7 @@ def normalizeVessels(case_dir):
 				endPoint_absc_list = endPoint2_absc_list.values()
 
 			if (splitter.GetOutput().GetPointData().GetArray("Abscissas").GetComponent(i,0)-bifPoint_absc_list["baseline"]< min(endPoint_absc_list)) and \
-				(splitter.GetOutput().GetPointData().GetArray("Abscissas").GetComponent(i,0)-bifPoint_absc_list["baseline"] < dist_from_bif):
+				(splitter.GetOutput().GetPointData().GetArray("Abscissas").GetComponent(i,0)-bifPoint_absc_list["baseline"] < dist_from_bif_outlet):
 				end_id = i
 				end_point_absc = splitted_centerline.GetPointData().GetArray("Abscissas").GetComponent(i,0)
 				end_point = list(splitted_centerline.GetPoints().GetPoint(i))
@@ -324,7 +326,7 @@ def normalizeVessels(case_dir):
 		start_point_normal_ = list(centerlines[key].GetPointData().GetArray("FrenetNormal").GetTuple(iD))
 		start_point_binormal_ = list(centerlines[key].GetPointData().GetArray("FrenetBinormal").GetTuple(iD))
 
-		surface, clipBox, clipPlane = clip_polydata_by_box(surface, start_point_, start_point_tangent_, start_point_normal_, start_point_binormal_, size=[15,15,1])
+		surface, clipBox, clipPlane = clip_polydata_by_box(surface, start_point_, start_point_tangent_, start_point_normal_, start_point_binormal_, size=[15,15,1], capping=capping)
 
 		clipBoxes_.append(clipBox)
 		clipPlanes_.append(clipPlane)
@@ -340,7 +342,7 @@ def normalizeVessels(case_dir):
 			end_point_normal_ = list(centerlines[key].GetPointData().GetArray("FrenetNormal").GetTuple(iD))
 			end_point_binormal_ = list(centerlines[key].GetPointData().GetArray("FrenetBinormal").GetTuple(iD))
 
-			surface, clipBox, clipPlane = clip_polydata_by_box(surface, end_point_, end_point_tangent_, end_point_normal_, end_point_binormal_, size=[10,10,1])
+			surface, clipBox, clipPlane = clip_polydata_by_box(surface, end_point_, end_point_tangent_, end_point_normal_, end_point_binormal_, size=[10,10,1], capping=capping)
 			clipBoxes_.append(clipBox)
 			clipPlanes_.append(clipPlane)
 
@@ -421,7 +423,12 @@ def main():
 
 	dataList = os.listdir(data_dir)[0:]
 
+# 	dataList = ["LingKW_baseline-post","WongYK_followup"]
+
 	for case in dataList:
+		# phases = [case.split("_")[1]]
+		# case = case.split("_")[0]
+
 		for phase in phases:
 			if batch_centerline:
 				if phase == "followup":
