@@ -490,8 +490,5 @@ def main():
 		if batch_clip:
 			normalizeVessels(os.path.join(data_dir,case))
 
-		exit()
-
-
 if __name__=="__main__":
 	main()
