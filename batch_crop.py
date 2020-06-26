@@ -12,7 +12,7 @@ smooth_relaxation_3DRA = 0.1
 smooth_relaxation_CBCT = 0.2
 batch_centerline = False
 batch_clip = True
-capping = True
+capping = False
 
 def clip_polydata_by_box(polydata, point, tangent, normal, binormal, size=[10,10,1], capping=True):
 	"""Clip the input polydata with given box shape and direction
@@ -23,12 +23,11 @@ def clip_polydata_by_box(polydata, point, tangent, normal, binormal, size=[10,10
 	normal (array): Direction tangent of the clipping box (major axis)
 	normal (array): Direction normal of the clipping box
 	normal (array): Direction binormal of the clipping box
-	size (array): Size of the clipping box (default: [10,10,1], note that actual clip box size will be half of that input, bug to be fixed)
+	size (array): Size of the clipping box (default: [10,10,1])
+	capping (bool): Flag to cap the clipped surface
 
 	Returns:
-	vtkPolyData: Clipped polydata
-	vtkPolyData: Clipping box
-	vtkPolyData: Clipping plane
+	dict: {"clipped_surface": clipped polydata, "clip_box": clipping box, "clip_plane": clipping plane, "boundary_cap": cap}
 	"""
 
 	# create a clipping box widget
@@ -39,17 +38,12 @@ def clip_polydata_by_box(polydata, point, tangent, normal, binormal, size=[10,10
 	w = math.atan(math.sqrt(tangent[0]**2+tangent[1]**2)/tangent[2])*180/3.14
 	transform.RotateWXYZ(w, -tangent[1], tangent[0],0)
 	transform.Scale(size)
-	
-	# print(transform.GetMatrix())
 
 	clipBox = vtk.vtkCubeSource()
 	transformFilter = vtk.vtkTransformPolyDataFilter()
 	transformFilter.SetInputConnection(clipBox.GetOutputPort())
 	transformFilter.SetTransform(transform)
 	transformFilter.Update()
-
-	clipBoxPolyData = vtk.vtkPolyData()
-	clipBoxPolyData.DeepCopy(transformFilter.GetOutput())
 
 	clipWidget.SetTransform(transform)
 	clipFunction = vtk.vtkPlanes()
@@ -64,25 +58,25 @@ def clip_polydata_by_box(polydata, point, tangent, normal, binormal, size=[10,10
 
 	polydata.DeepCopy(clipper.GetOutput())
 
+	# extract feature edges
+	boundaryEdges = vtk.vtkFeatureEdges()
+	boundaryEdges.SetInputData(polydata)
+	boundaryEdges.BoundaryEdgesOn()
+	boundaryEdges.FeatureEdgesOff()
+	boundaryEdges.NonManifoldEdgesOff()
+	boundaryEdges.ManifoldEdgesOff()
+	boundaryEdges.Update()
+
+	boundaryStrips = vtk.vtkStripper()
+	boundaryStrips.SetInputData(boundaryEdges.GetOutput())
+	boundaryStrips.Update()
+
+	# Change the polylines into polygons
+	boundaryPoly = vtk.vtkPolyData()
+	boundaryPoly.SetPoints(boundaryStrips.GetOutput().GetPoints())
+	boundaryPoly.SetPolys(boundaryStrips.GetOutput().GetLines())
+
 	if capping:
-		# extract feature edges
-		boundaryEdges = vtk.vtkFeatureEdges()
-		boundaryEdges.SetInputData(polydata)
-		boundaryEdges.BoundaryEdgesOn()
-		boundaryEdges.FeatureEdgesOff()
-		boundaryEdges.NonManifoldEdgesOff()
-		boundaryEdges.ManifoldEdgesOff()
-		boundaryEdges.Update()
-
-		boundaryStrips = vtk.vtkStripper()
-		boundaryStrips.SetInputData(boundaryEdges.GetOutput())
-		boundaryStrips.Update()
-
-		# Change the polylines into polygons
-		boundaryPoly = vtk.vtkPolyData()
-		boundaryPoly.SetPoints(boundaryStrips.GetOutput().GetPoints())
-		boundaryPoly.SetPolys(boundaryStrips.GetOutput().GetLines())
-
 		appendFilter = vtk.vtkAppendPolyData()
 		appendFilter.AddInputData(polydata)
 		appendFilter.AddInputData(boundaryPoly)
@@ -99,9 +93,24 @@ def clip_polydata_by_box(polydata, point, tangent, normal, binormal, size=[10,10
 	origin = []
 	
 	for i in range(3):
-		point1.append(point[i]-normal[i]*math.sqrt(2)/2*size[0])
-		point2.append(point[i]+normal[i]*math.sqrt(2)/2*size[0])
-		origin.append(point[i]+binormal[i]*math.sqrt(2)/2*size[0])
+		point1.append(point[i]-normal[i]*math.sqrt(2)/2*size[0]/2)
+		point2.append(point[i]+normal[i]*math.sqrt(2)/2*size[1]/2)
+		origin.append(point[i]+binormal[i]*math.sqrt(2)/2*size[0]/2)
+
+	transform_clipbox = vtk.vtkTransform()
+	transform_clipbox.Translate(point)	
+	w = math.atan(math.sqrt(tangent[0]**2+tangent[1]**2)/tangent[2])*180/3.14
+	transform_clipbox.RotateWXYZ(w, -tangent[1], tangent[0],0)
+	transform_clipbox.Scale([number/2 for number in size])
+
+	clipBox = vtk.vtkCubeSource()
+	transformFilterClipBox = vtk.vtkTransformPolyDataFilter()
+	transformFilterClipBox.SetInputConnection(clipBox.GetOutputPort())
+	transformFilterClipBox.SetTransform(transform_clipbox)
+	transformFilterClipBox.Update()
+
+	clipBoxPolyData = vtk.vtkPolyData()
+	clipBoxPolyData.DeepCopy(transformFilterClipBox.GetOutput())
 
 	planeSource = vtk.vtkPlaneSource()
 	planeSource.SetResolution(10,10)
@@ -112,7 +121,7 @@ def clip_polydata_by_box(polydata, point, tangent, normal, binormal, size=[10,10
 
 	clipPlanePolyData = vtk.vtkPolyData()
 	clipPlanePolyData.DeepCopy(planeSource.GetOutput())
-	return polydata, clipBoxPolyData, clipPlanePolyData
+	return {"clipped_surface": polydata, "clip_box": clipBoxPolyData, "clip_plane": clipPlanePolyData, "boundary_cap": boundaryPoly}
 
 def centerlineCalculation(working_dir, relaxation = 0):
 	if not os.path.exists(os.path.join(working_dir,"surface.vtk")):
@@ -298,11 +307,10 @@ def normalizeVessels(case_dir):
 				end_points_normal.append(end_point_normal)
 				end_points_binormal.append(end_point_binormal)
 
-	print("end_points",end_points)
-
 	# clip the surfaces
 	clipBoxes = {}
 	clipPlanes = {}
+	boundaryCaps = {}
 	surfaces_clipped = {}
 	centerlines_clipped = {}
 	# connected component calculation on surface and centerline
@@ -313,8 +321,9 @@ def normalizeVessels(case_dir):
 	connectedFilter.SetClosestPoint(bifPoint)
 
 	for key, surface in surfaces.items():
-		clipBoxes_ = []
-		clipPlanes_ = []
+		clipBoxes_ = {}
+		clipPlanes_ = {}
+		boundaryCaps_ = {}
 
 		kdTree = vtk.vtkKdTreePointLocator()
 		kdTree.SetDataSet(centerlines[key])
@@ -326,10 +335,23 @@ def normalizeVessels(case_dir):
 		start_point_normal_ = list(centerlines[key].GetPointData().GetArray("FrenetNormal").GetTuple(iD))
 		start_point_binormal_ = list(centerlines[key].GetPointData().GetArray("FrenetBinormal").GetTuple(iD))
 
-		surface, clipBox, clipPlane = clip_polydata_by_box(surface, start_point_, start_point_tangent_, start_point_normal_, start_point_binormal_, size=[15,15,1], capping=capping)
+		clip_result = clip_polydata_by_box(surface, start_point_, start_point_tangent_, start_point_normal_, start_point_binormal_, size=[15,15,1], capping=capping)
 
-		clipBoxes_.append(clipBox)
-		clipPlanes_.append(clipPlane)
+		# perform lcc everytime after clipping to guarantee clean result
+		connectedFilter.SetInputData(clip_result["clipped_surface"])
+		connectedFilter.Update()
+		surface.DeepCopy(connectedFilter.GetOutput())
+
+		clipBoxes_.update({"ICA": clip_result["clip_box"]})
+		clipPlanes_.update({"ICA": clip_result["clip_plane"]})
+		connectedFilter_cap = vtk.vtkConnectivityFilter()
+		connectedFilter_cap.SetExtractionModeToClosestPointRegion()
+		connectedFilter_cap.SetClosestPoint([start_point_[i] + start_point_tangent_[i] for i in range(len(start_point_))])
+		connectedFilter_cap.SetInputData(clip_result["boundary_cap"])
+		connectedFilter_cap.Update()
+		start_cap = vtk.vtkPolyData()
+		start_cap.DeepCopy(connectedFilter_cap.GetOutput())
+		boundaryCaps_.update({"ICA": start_cap})
 
 		for i in range(len(end_points)):
 			kdTree = vtk.vtkKdTreePointLocator()
@@ -342,15 +364,32 @@ def normalizeVessels(case_dir):
 			end_point_normal_ = list(centerlines[key].GetPointData().GetArray("FrenetNormal").GetTuple(iD))
 			end_point_binormal_ = list(centerlines[key].GetPointData().GetArray("FrenetBinormal").GetTuple(iD))
 
-			surface, clipBox, clipPlane = clip_polydata_by_box(surface, end_point_, end_point_tangent_, end_point_normal_, end_point_binormal_, size=[10,10,1], capping=capping)
-			clipBoxes_.append(clipBox)
-			clipPlanes_.append(clipPlane)
+			clip_result = clip_polydata_by_box(surface, end_point_, end_point_tangent_, end_point_normal_, end_point_binormal_, size=[10,10,1], capping=capping)
+			# perform lcc everytime after clipping to guarantee clean result
+			connectedFilter.SetInputData(clip_result["clipped_surface"])
+			connectedFilter.Update()
+			surface.DeepCopy(connectedFilter.GetOutput())
 
-		connectedFilter.SetInputData(surface)
-		connectedFilter.Update()
-		surface.DeepCopy(connectedFilter.GetOutput())
+			if i == 0:
+				outlet_key = "ACA"
+			else:
+				outlet_key = "MCA"
+
+			clipBoxes_.update({outlet_key: clip_result["clip_box"]})
+			clipPlanes_.update({outlet_key: clip_result["clip_plane"]})
+			connectedFilter_cap = vtk.vtkConnectivityFilter()
+			connectedFilter_cap.SetExtractionModeToClosestPointRegion()
+			connectedFilter_cap.SetClosestPoint([end_point_[i] - end_point_tangent_[i] for i in range(len(end_point_))])
+			connectedFilter_cap.SetInputData(clip_result["boundary_cap"])
+			connectedFilter_cap.Update()
+			end_cap = vtk.vtkPolyData()
+			end_cap.DeepCopy(connectedFilter_cap.GetOutput())
+			# end_cap = clip_result["boundary_cap"]
+			boundaryCaps_.update({outlet_key: end_cap})
+
 		clipBoxes.update({key: clipBoxes_})
 		clipPlanes.update({key: clipPlanes_})
+		boundaryCaps.update({key: boundaryCaps_})
 		surfaces_clipped.update({key: surface})
 
 	for key,centerline in centerlines.items():
@@ -364,7 +403,8 @@ def normalizeVessels(case_dir):
 		start_point_normal_ = list(centerlines[key].GetPointData().GetArray("FrenetNormal").GetTuple(iD))
 		start_point_binormal_ = list(centerlines[key].GetPointData().GetArray("FrenetBinormal").GetTuple(iD))
 
-		centerline, _ , _ = clip_polydata_by_box(centerline, start_point_, start_point_tangent_, start_point_normal_, start_point_binormal_, size=[15,15,1])
+		clip_result = clip_polydata_by_box(centerline, start_point_, start_point_tangent_, start_point_normal_, start_point_binormal_, size=[15,15,1])
+		centerline = clip_result["clipped_surface"]
 
 		for i in range(len(end_ids)):
 			kdTree = vtk.vtkKdTreePointLocator()
@@ -377,7 +417,8 @@ def normalizeVessels(case_dir):
 			end_point_normal_ = list(centerlines[key].GetPointData().GetArray("FrenetNormal").GetTuple(iD))
 			end_point_binormal_ = list(centerlines[key].GetPointData().GetArray("FrenetBinormal").GetTuple(iD))
 
-			centerline, _ , _ = clip_polydata_by_box(centerline, end_point_, end_point_tangent_, end_point_normal_, end_point_binormal_, size=[10,10,1])
+			clip_result = clip_polydata_by_box(centerline, end_point_, end_point_tangent_, end_point_normal_, end_point_binormal_, size=[10,10,1])
+			centerline = clip_result["clipped_surface"]
 
 		connectedFilter.SetInputData(centerline)
 		connectedFilter.Update()
@@ -387,28 +428,35 @@ def normalizeVessels(case_dir):
 	# output
 	vtpWriter = vtk.vtkXMLPolyDataWriter()
 
-	for key, value in surfaces_clipped.items():
-		vtpWriter.SetFileName(os.path.join(case_dir,key,"surface_clipped.vtp"))
-		vtpWriter.SetInputData(value)
-		vtpWriter.Update()
-
 	for key, value in centerlines_clipped.items():
 		vtpWriter.SetFileName(os.path.join(case_dir,key,"centerline_clipped.vtp"))
 		vtpWriter.SetInputData(value)
 		vtpWriter.Update()
 
-	writer = vtk.vtkSTLWriter()
+	stlWriter = vtk.vtkSTLWriter()
+
+	for key, value in surfaces_clipped.items():
+		stlWriter.SetFileName(os.path.join(case_dir,key,"surface_clipped.stl"))
+		stlWriter.SetInputData(value)
+		stlWriter.Update()
+
 	for key, value in clipBoxes.items():
-		for i in range(len(value)):
-			writer.SetFileName(os.path.join(case_dir,key,"clip_box_" + str(i) + ".stl"))
-			writer.SetInputData(value[i])
-			writer.Update()
+		for key_, value_ in value.items():
+			stlWriter.SetFileName(os.path.join(case_dir,key,"clip_box_" + key_ + ".stl"))
+			stlWriter.SetInputData(value_)
+			stlWriter.Update()
 
 	for key, value in clipPlanes.items():
-		for i in range(len(value)):
-			writer.SetFileName(os.path.join(case_dir,key,"clip_plane_" + str(i) + ".stl"))
-			writer.SetInputData(value[i])
-			writer.Update()
+		for key_, value_ in value.items():
+			stlWriter.SetFileName(os.path.join(case_dir,key,"clip_plane_" + key_ + ".stl"))
+			stlWriter.SetInputData(value_)
+			stlWriter.Update()
+
+	for key, value in boundaryCaps.items():
+		for key_, value_ in value.items():
+			stlWriter.SetFileName(os.path.join(case_dir,key,"boundary_cap_" + key_ + ".stl"))
+			stlWriter.SetInputData(value_)
+			stlWriter.Update()
 
 def main():
 	# # for comparison data
@@ -426,6 +474,7 @@ def main():
 # 	dataList = ["LingKW_baseline-post","WongYK_followup"]
 
 	for case in dataList:
+		print(case)
 		# phases = [case.split("_")[1]]
 		# case = case.split("_")[0]
 
@@ -440,6 +489,9 @@ def main():
 
 		if batch_clip:
 			normalizeVessels(os.path.join(data_dir,case))
+
+		exit()
+
 
 if __name__=="__main__":
 	main()
