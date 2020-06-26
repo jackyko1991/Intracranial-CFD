@@ -15,15 +15,16 @@ FoamFile
 // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
 
 convertToMeters 0.001;
+// convertToMeters 1;
 
 vertices
 (
-	(-18.5 -40 -55)
-	(-2.5 -40 -55)
-	(-2.5 -21.4 -55)
-	(-18.5 -21.4 -55)
-	(-18.5 -40 -29)
-	(-2.5 -40 -29)
+	(-18.5 -41 -50.5)
+	(-2.5 -41 -50.5)
+	(-2.5 -21.4 -50.5)
+	(-18.5 -21.4 -50.5)
+	(-18.5 -41 -29)
+	(-2.5 -41 -29)
 	(-2.5 -21.4 -29)
 	(-18.5 -21.4 -29)
 );
@@ -35,7 +36,7 @@ edges
 blocks
 (
 	hex (0 1 2 3 4 5 6 7) // vertex numbers
-	(20 20 20)	//number of cells in each direction
+	(10 10 10)	//number of cells in each direction
 	simpleGrading (1 1 1) // cell expansion ratios
 );
 

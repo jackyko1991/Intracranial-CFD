@@ -20,9 +20,19 @@ solvers
     p
     {
         solver          PCG;
+        // solver          GAMG;
         preconditioner  DIC;
         tolerance       1e-06;
+        // tolerance       1e-07;
         relTol          0.05;
+        // relTol          0.01;
+        smoother GaussSeidel ;
+        // nPreSweeps 0;
+        // nPostSweeps 2;
+        // cacheAgglomeration on ;
+        // agglomerator faceAreaPair ;
+        // nCellsInCoarsestLevel 10;
+        // mergeLevels 1;
     }
 
     pFinal
@@ -35,8 +45,12 @@ solvers
     {
         solver          smoothSolver;
         smoother        symGaussSeidel;
+        // smoother GaussSeidel ;
         tolerance       1e-05;
+        // tolerance       1e-08;
         relTol          0;
+        // relTol 0.1;
+        // nSweeps 1;
     }
 }
 
@@ -48,5 +62,31 @@ PISO
     pRefValue       0;
 }
 
+// SIMPLE
+// {
+//     nNonOrthogonalCorrectors 2;
+// }
+
+// potentialFlow
+// {
+//     nNonOrthogonalCorrectors 10;
+// }
+
+// relaxationFactors
+// {
+//     fields
+//     {
+//         p 0.3;
+//     }
+//     equations
+//     {
+//         U 0.7;
+//     }
+// }
+
+// cache
+// {
+//     grad (U) ;
+// }
 
 // ************************************************************************* //

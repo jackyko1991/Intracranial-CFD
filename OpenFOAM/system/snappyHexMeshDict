@@ -26,12 +26,46 @@ addLayers true;
 // - to 'snap' the mesh boundary to the surface
 geometry
 {
-	vessel.stl
+	surface_clipped.stl
 	{
-	   type triSurfaceMesh;
-	   file "surface_clipped.stl";
-	   scale 0.001;
+		type triSurfaceMesh;
+		name Geometry;
+		scale 0.001;
+		regions
+		{
+			// patch name specification
+			//regionNameInSTLFile	{name patchNameInOpenFOAM;}
+			wall {name wall;}
+			ICA {name ICA;}
+			ACA {name ACA;}
+			MCA {name MCA;}
+		}
 	}
+
+	// surface_clipped.stl
+	// {
+	// 	type triSurfaceMesh;
+	// 	name wall;
+	// 	scale 0.001;
+	// }
+	// boundary_cap_ICA.stl
+	// {
+	// 	type triSurfaceMesh;
+	// 	name ICA;
+	// 	scale 0.001;
+	// }
+	// boundary_cap_ACA.stl
+	// {
+	// 	type triSurfaceMesh;
+	// 	name ACA;
+	// 	scale 0.001;
+	// }
+	// boundary_cap_MCA.stl
+	// {
+	// 	type triSurfaceMesh;
+	// 	name MCA;
+	// 	scale 0.001;
+	// }
 
 	// //- Refine a bit extra around the small centre hole
 	// refineHole
@@ -113,24 +147,109 @@ castellatedMeshControls
 	// The second level is the maximum level. Cells that 'see' multiple intersections where the intersections make an angle > resolveFeatureAngle
 	// get refined up to the maximum level.
 
+	// All surfaces defined in the geometry subdirectory must be listed here.
+	// List of the surfaces, which need to be listed in in the boundary files in constant/polyMesh/boundar
+
 	refinementSurfaces
 	{
-		vessel.stl // STL filename where all the regions are added
+		// vessel.stl // STL filename where all the regions are added
+		// {
+		// 	level (2 2); // default (min max) refinement for whole surface
+		// 	// regions
+		// 	// {
+		// 		// zone0 // Named region in the STL file
+		// 		// {
+		// 		// 	level (3 3);
+		// 		// 	// Optional specification of patch type (default is wall). No constrain types (cyclic, symmetry) etc. are allowed.
+		// 		// 	patchInfo
+		// 		// 	{
+		// 		// 		type patch;
+		// 		// 		inGroups (meshedPatches);
+		// 		// 	}
+		// 		// }
+		// 	// }
+		// }
+
+		// // It is necessary to define a specific point anywhere inside the region. 
+		// // Simply labelling the cellZoneInside as inside is not sufficient.
+		// wall
+		// {
+		// 	level (3 3);
+		// 	faceZone insideFaces;
+		// 	cellZone insideZone;
+		// 	cellZoneInside insidePoint;
+		// 	insidePoint (-0.0097 -0.02952 -0.0394567);
+		// }
+		// ICA
+		// {
+		// 	// No empty boundary. Define inlet/outlet as patch
+		// 	level (0 0);
+		// 	patchInfo
+		// 	{
+		// 		type patch;
+		// 	}
+		// }
+		// MCA
+		// {
+		// 	// No empty boundary. Define inlet/outlet as patch
+		// 	level (0 0);
+		// 	patchInfo
+		// 	{
+		// 		type patch;
+		// 	}
+		// }
+		// ACA
+		// {
+		// 	// No empty boundary. Define inlet/outlet as patch
+		// 	level (0 0);
+		// 	patchInfo
+		// 	{
+		// 		type patch;
+		// 	}
+		// }
+
+		Geometry
 		{
-			level (2 2); // default (min max) refinement for whole surface
-			// regions
-			// {
-				// zone0 // Named region in the STL file
-				// {
-				// 	level (3 3);
-				// 	// Optional specification of patch type (default is wall). No constrain types (cyclic, symmetry) etc. are allowed.
-				// 	patchInfo
-				// 	{
-				// 		type patch;
-				// 		inGroups (meshedPatches);
-				// 	}
-				// }
-			// }
+			level (1 1);
+
+			regions
+			{
+				// surface region refinement 
+                // patch type specification
+                // stlRegionName     { level (default feature_angle_resolved); patchInfo { type patchType; }
+                wall 
+                { 
+                	level (3 4); 
+                	patchInfo 
+                	{ 
+                		type wall;
+                	}
+            	}
+                ICA 
+                { 
+                	level (4 4); 
+                	patchInfo 
+                	{ 
+                		type patch;
+                	}
+                }
+                MCA 
+                { 
+                	level (4 4); 
+                	patchInfo 
+                	{ 
+                		type patch;
+                	}
+                }
+                ACA 
+                { 
+                	level (4 4); 
+                	patchInfo 
+                	{ 
+                		type patch;
+                	}
+                }
+			}
 		}
 	}
 
@@ -245,7 +364,7 @@ addLayersControls
 	// - angle to nearest surface < slipFeatureAngle (see below)
 	layers
 	{
-		"vessel.stl_.*"
+		"wall.*"
 		{
 		    nSurfaceLayers 2;
 		}
