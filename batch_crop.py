@@ -13,6 +13,7 @@ smooth_relaxation_CBCT = 0.2
 batch_centerline = False
 batch_clip = True
 capping = False
+stl_concat = True
 
 def clip_polydata_by_box(polydata, point, tangent, normal, binormal, size=[10,10,1], capping=True):
 	"""Clip the input polydata with given box shape and direction
@@ -457,6 +458,27 @@ def normalizeVessels(case_dir):
 			stlWriter.SetFileName(os.path.join(case_dir,key,"boundary_cap_" + key_ + ".stl"))
 			stlWriter.SetInputData(value_)
 			stlWriter.Update()
+
+	inletKeys = ["ICA","ACA","MCA"]
+
+	if stl_concat:
+		for phase in phases:
+			if not os.path.exists(os.path.join(case_dir,phase,"surface_clipped.stl")):
+				continue
+
+			stl_text = open(os.path.join(case_dir,phase,"surface_clipped.stl")).read()
+			stl_text = stl_text.replace("ascii","wall")
+
+			os.remove(os.path.join(case_dir,phase,"surface_capped.stl"))
+
+			output_stl_object = open(os.path.join(case_dir,phase,"surface_capped.stl"),"a")
+			output_stl_object.write(stl_text)
+
+			for inletKey in inletKeys:
+				stl_text = open(os.path.join(case_dir,phase,"boundary_cap_" + inletKey + ".stl")).read()
+				stl_text = stl_text.replace("ascii",inletKey)
+				output_stl_object.write(stl_text)
+			output_stl_object.close()
 
 def main():
 	# # for comparison data
