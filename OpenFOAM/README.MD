@@ -1,5 +1,13 @@
 # OpenFOAM CFD Simulation on Vascular Structures
 
+This repository provides a fully automated CFD simulation pipeline using OpenFOAM. User should provide vessel STL surface with named region and associated centerline file for the process.
+
+## OpenFOAM installation  (Ubuntu 18.04)
+1. Install OpenFOAM main package
+2. Install `PyFoam` for dictionary edition (https://openfoamwiki.net/index.php/Contrib/PyFoam)
+	1. We recommend users to use Anaconda 3.7 (https://www.anaconda.com/products/individual)
+	2. Install `PyFoam` using the command `pip install PyFoam`
+
 ## Processing Workflow
 1. After preparing vessel surface file (VTK/STL format), execute `batch_crop.py` for centerline extraction and inlet/outlet normalization (capping preferred)
 2. Place the clipped surface at `<OpenFOAM-case-dir>/constant/triSurface`.
@@ -13,6 +21,7 @@
 		- `snap`: Works on the cells at the walls to adapt their vertices to the initial geometry in order to obtain a smooth and realistic mesh surface (output as time point 2)
 		- `addLayers`: Refine the mesh to compute an accurate wall shear stress. The geometry of mesh is not altered but add layers of cells at the walls of the vessel domain. This process reduces the distance between the first nodes, hence corrects surface imperfections. (output as time point 3)
 	2. Execute `snappyHexMesh`. Use `snappyHexMesh -overwrite` to export final mesh only as time point 0.
+	3. Execute `icoFoam` for CFD simulation.
 	3. The OpenFOAM mesh format can be exported to VTK with command `foamToVTK`. Results will be exported to `<OpenFOAM-case-dir>/VTK` .
 
 ## Reference
