@@ -15,7 +15,7 @@ FoamFile
 // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
 
 
-surface_clipped.stl
+surface_capped.stl
 
 {
 	// How to obtain raw features (extractFromFile || extractFromSurface)

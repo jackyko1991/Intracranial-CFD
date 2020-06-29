@@ -26,7 +26,7 @@ addLayers true;
 // - to 'snap' the mesh boundary to the surface
 geometry
 {
-	surface_clipped.stl
+	surface_capped.stl
 	{
 		type triSurfaceMesh;
 		name Geometry;
@@ -134,7 +134,7 @@ castellatedMeshControls
 	features
 	(
 		{
-			file "surface_clipped.eMesh";
+			file "surface_capped.eMesh";
 			levels ((4 4));
 		}	
 	);
