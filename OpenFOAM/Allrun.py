@@ -160,8 +160,8 @@ def run_case(case_dir, output_vtk=False, parallel=True, cores=4):
 
 		# run cfd
 		# need to edit initial velocity file
-		# print("{}: Execute icoFoam...".format(datetime.datetime.now()))
-		# os.system("icoFoam > ./log/icoFoam.log")
+		print("{}: Execute icoFoam...".format(datetime.datetime.now()))
+		os.system("icoFoam > ./log/icoFoam.log")
 
 	# create OpenFOAM read fill for paraview
 	os.system("touch OpenFOAM.OpenFOAM")
@@ -182,7 +182,7 @@ def main():
 	# for case in os.listdir(data_dir):
 	for case in ["ChanSP"]:
 		for phase in phases:
-			run_case(os.path.join(data_dir,case,phase),output_vtk=False, parallel=True, cores=12)
+			run_case(os.path.join(data_dir,case,phase),output_vtk=False, parallel=True, cores=4)
 			exit()
 
 if __name__ == "__main__":
