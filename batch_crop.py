@@ -467,7 +467,7 @@ def normalizeVessels(case_dir):
 				continue
 
 			stl_text = open(os.path.join(case_dir,phase,"surface_clipped.stl")).read()
-			stl_text = stl_text.replace("ascii","wall")
+			stl_text = stl_text.replace("ascii","vessel")
 
 			os.remove(os.path.join(case_dir,phase,"surface_capped.stl"))
 
