@@ -20,7 +20,7 @@ internalField   uniform 0;
 
 boundaryField
 {
-    wall
+    vessel
     {
         type zeroGradient;
     }
@@ -42,29 +42,9 @@ boundaryField
         value uniform 0;
     }
 
-    frontAndBack
+    walls
     {
-        type slip ;
-    }
-
-    leftWall
-    {
-        type slip ;
-    }
-
-    rightWall
-    {
-        type slip ;
-    }
-
-    lowerWall
-    {
-        type slip ;
-    }
-
-    upperWall
-    {
-        type slip ;
+        type empty;
     }
 }
 

@@ -35,65 +35,12 @@ geometry
 		{
 			// patch name specification
 			//regionNameInSTLFile	{name patchNameInOpenFOAM;}
-			wall {name wall;}
+			vessel {name vessel;}
 			ICA {name ICA;}
 			ACA {name ACA;}
 			MCA {name MCA;}
 		}
 	}
-
-	// surface_clipped.stl
-	// {
-	// 	type triSurfaceMesh;
-	// 	name wall;
-	// 	scale 0.001;
-	// }
-	// boundary_cap_ICA.stl
-	// {
-	// 	type triSurfaceMesh;
-	// 	name ICA;
-	// 	scale 0.001;
-	// }
-	// boundary_cap_ACA.stl
-	// {
-	// 	type triSurfaceMesh;
-	// 	name ACA;
-	// 	scale 0.001;
-	// }
-	// boundary_cap_MCA.stl
-	// {
-	// 	type triSurfaceMesh;
-	// 	name MCA;
-	// 	scale 0.001;
-	// }
-
-	// //- Refine a bit extra around the small centre hole
-	// refineHole
-	// {
-		// type searchableSphere;
-		// centre (0 0 -0.012);
-		// radius 0.003;
-	// }
-
-	// surface_clipped.stl // STL filename where all the regions are added
-	// {
-	// 	type triSurfaceMesh;
-		
-	// 	regions
-	// 	{
-	// 		zone0	// Named region in the STL file
-	// 		{
-	// 			name vesselWalll; // User-defined patch name. If not provided will be <filename>_<region>
-	// 		}
-	// 	}
-
-	// 	// refinementBox // Geometry to refine. Entities: Box, Cylinder, Sphere, Plane
-	// 	// {
-	// 	// 	type searchableBox;
-	// 	// 	min ();
-	// 	// 	max ();
-	// 	// }
-	// }
 }
 
 // Settings for the castellatedMesh generation
@@ -152,62 +99,6 @@ castellatedMeshControls
 
 	refinementSurfaces
 	{
-		// vessel.stl // STL filename where all the regions are added
-		// {
-		// 	level (2 2); // default (min max) refinement for whole surface
-		// 	// regions
-		// 	// {
-		// 		// zone0 // Named region in the STL file
-		// 		// {
-		// 		// 	level (3 3);
-		// 		// 	// Optional specification of patch type (default is wall). No constrain types (cyclic, symmetry) etc. are allowed.
-		// 		// 	patchInfo
-		// 		// 	{
-		// 		// 		type patch;
-		// 		// 		inGroups (meshedPatches);
-		// 		// 	}
-		// 		// }
-		// 	// }
-		// }
-
-		// // It is necessary to define a specific point anywhere inside the region. 
-		// // Simply labelling the cellZoneInside as inside is not sufficient.
-		// wall
-		// {
-		// 	level (3 3);
-		// 	faceZone insideFaces;
-		// 	cellZone insideZone;
-		// 	cellZoneInside insidePoint;
-		// 	insidePoint (-0.0097 -0.02952 -0.0394567);
-		// }
-		// ICA
-		// {
-		// 	// No empty boundary. Define inlet/outlet as patch
-		// 	level (0 0);
-		// 	patchInfo
-		// 	{
-		// 		type patch;
-		// 	}
-		// }
-		// MCA
-		// {
-		// 	// No empty boundary. Define inlet/outlet as patch
-		// 	level (0 0);
-		// 	patchInfo
-		// 	{
-		// 		type patch;
-		// 	}
-		// }
-		// ACA
-		// {
-		// 	// No empty boundary. Define inlet/outlet as patch
-		// 	level (0 0);
-		// 	patchInfo
-		// 	{
-		// 		type patch;
-		// 	}
-		// }
-
 		Geometry
 		{
 			level (1 1);
@@ -217,7 +108,7 @@ castellatedMeshControls
 				// surface region refinement 
                 // patch type specification
                 // stlRegionName     { level (default feature_angle_resolved); patchInfo { type patchType; }
-                wall 
+                vessel 
                 { 
                 	level (3 4); 
                 	patchInfo 
@@ -364,7 +255,7 @@ addLayersControls
 	// - angle to nearest surface < slipFeatureAngle (see below)
 	layers
 	{
-		"wall.*"
+		"vessel.*"
 		{
 		    nSurfaceLayers 2;
 		}

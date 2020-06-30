@@ -14,7 +14,7 @@ FoamFile
 }
 // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
 
-surfaces ("surface_clipped.stl");
+surfaces ("surface_capped.stl");
 
 // Identify a feature when angle between faces < includedAngle
 includedAngle   150;
