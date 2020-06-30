@@ -24,6 +24,26 @@ This repository provides a fully automated CFD simulation pipeline using OpenFOA
 	3. Execute `icoFoam` for CFD simulation.
 	3. The OpenFOAM mesh format can be exported to VTK with command `foamToVTK`. Results will be exported to `<OpenFOAM-case-dir>/VTK` .
 
+## Parallel Processing Benchmarking
+The parallel processing test is on a 6C12T devices with different subdomain configurations. The procedure includes:
+1. `blockMesh`
+2. `surfaceFeatureExtract`
+3. `decomposePar`
+4. `snappyHexMesh`
+5. `icoFoam`
+6. `reconstructParMesh`
+7. `reconstructPar`.
+
+Test results are as following:
+
+| Cores         | Time(s)     | 
+| ------------- |-------------| 
+| 1             | 88.418      | 
+| 2             | 60.699      | 
+| 4             | 39.691      | 
+| 8             | 51.170      |
+|12             | 46.494      |
+
 ## Reference
 - Hemodynamics in the Thoracic Aorta using OpenFOAM: 4D PCMRI versus CFD (https://core.ac.uk/download/pdf/81582466.pdf)
 - OpenFOAM User Guide version 7 (http://foam.sourceforge.net/docs/Guides-a4/OpenFOAMUserGuide-A4.pdf)
