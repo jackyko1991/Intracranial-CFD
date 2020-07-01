@@ -3,8 +3,10 @@ import shutil
 import vtk
 import math
 import numpy as np
+import json
 
-data_dir = "Z:/data/intracranial/followup/medical"
+# data_dir = "Z:/data/intracranial/followup/medical"
+data_dir = "/mnt/DIIR-JK-NAS/data/intracranial/followup/medical"
 binary_path = "D:/projects/CFD_intracranial/cxx/Vessel-Centerline-Extraction/build/Release/CenterlineExtraction.exe"
 dist_from_bif_inlet = 35
 dist_from_bif_outlet = 25
@@ -202,6 +204,7 @@ def normalizeVessels(case_dir):
 
 	bifPoint = mainBranch.GetPoint(maxAbscId)
 
+	bifPoint_list = {}
 	bifPoint_absc_list = {}
 	bifPoint_id_list = {}
 	endPoint1_absc_list = {}
@@ -231,6 +234,9 @@ def normalizeVessels(case_dir):
 		MCA = splitter.GetOutput()
 		endPoint2_absc_list.update({key: ACA.GetPointData().GetArray("Abscissas").GetComponent(MCA.GetNumberOfPoints()-1,0) - bifPoint_absc_list[key]})
 		endPoint2_id_list.update({key: ACA.GetNumberOfPoints()-1})
+
+		# append the bifurcation point
+		bifPoint_list.update({key: bifPoint})
 
 	# get the start point coordinate
 	start_id = 0
@@ -320,11 +326,13 @@ def normalizeVessels(case_dir):
 	# connectedFilter.ColorRegionsOn()
 	connectedFilter.SetExtractionModeToClosestPointRegion()
 	connectedFilter.SetClosestPoint(bifPoint)
+	key_point_list = {}
 
 	for key, surface in surfaces.items():
 		clipBoxes_ = {}
 		clipPlanes_ = {}
 		boundaryCaps_ = {}
+		key_point_list_ = {}
 
 		kdTree = vtk.vtkKdTreePointLocator()
 		kdTree.SetDataSet(centerlines[key])
@@ -335,6 +343,9 @@ def normalizeVessels(case_dir):
 		start_point_tangent_ = list(centerlines[key].GetPointData().GetArray("FrenetTangent").GetTuple(iD))
 		start_point_normal_ = list(centerlines[key].GetPointData().GetArray("FrenetNormal").GetTuple(iD))
 		start_point_binormal_ = list(centerlines[key].GetPointData().GetArray("FrenetBinormal").GetTuple(iD))
+
+		start_point_dict = {"coordinate": start_point_, "tangent": start_point_tangent_, "normal": start_point_normal_, "binormal": start_point_binormal_}
+		key_point_list_.update({"ICA": start_point_dict})
 
 		clip_result = clip_polydata_by_box(surface, start_point_, start_point_tangent_, start_point_normal_, start_point_binormal_, size=[15,15,1], capping=capping)
 
@@ -355,6 +366,11 @@ def normalizeVessels(case_dir):
 		boundaryCaps_.update({"ICA": start_cap})
 
 		for i in range(len(end_points)):
+			if i == 0:
+				outlet_key = "ACA"
+			else:
+				outlet_key = "MCA"
+
 			kdTree = vtk.vtkKdTreePointLocator()
 			kdTree.SetDataSet(centerlines[key])
 			iD = kdTree.FindClosestPoint(end_points[i])
@@ -365,16 +381,14 @@ def normalizeVessels(case_dir):
 			end_point_normal_ = list(centerlines[key].GetPointData().GetArray("FrenetNormal").GetTuple(iD))
 			end_point_binormal_ = list(centerlines[key].GetPointData().GetArray("FrenetBinormal").GetTuple(iD))
 
+			end_point_dict = {"coordinate": end_point_, "tangent": end_point_tangent_, "normal": end_point_normal_, "binormal": end_point_binormal_}
+			key_point_list_.update({outlet_key: start_point_dict})
+
 			clip_result = clip_polydata_by_box(surface, end_point_, end_point_tangent_, end_point_normal_, end_point_binormal_, size=[10,10,1], capping=capping)
 			# perform lcc everytime after clipping to guarantee clean result
 			connectedFilter.SetInputData(clip_result["clipped_surface"])
 			connectedFilter.Update()
 			surface.DeepCopy(connectedFilter.GetOutput())
-
-			if i == 0:
-				outlet_key = "ACA"
-			else:
-				outlet_key = "MCA"
 
 			clipBoxes_.update({outlet_key: clip_result["clip_box"]})
 			clipPlanes_.update({outlet_key: clip_result["clip_plane"]})
@@ -392,6 +406,7 @@ def normalizeVessels(case_dir):
 		clipPlanes.update({key: clipPlanes_})
 		boundaryCaps.update({key: boundaryCaps_})
 		surfaces_clipped.update({key: surface})
+		key_point_list.update({key: key_point_list_})
 
 	for key,centerline in centerlines.items():
 		kdTree = vtk.vtkKdTreePointLocator()
@@ -468,6 +483,7 @@ def normalizeVessels(case_dir):
 
 			stl_text = open(os.path.join(case_dir,phase,"surface_clipped.stl")).read()
 			stl_text = stl_text.replace("ascii","vessel")
+			stl_text = stl_text.replace("Visualization Toolkit generated SLA File", "vessel")
 
 			os.remove(os.path.join(case_dir,phase,"surface_capped.stl"))
 
@@ -477,8 +493,16 @@ def normalizeVessels(case_dir):
 			for inletKey in inletKeys:
 				stl_text = open(os.path.join(case_dir,phase,"boundary_cap_" + inletKey + ".stl")).read()
 				stl_text = stl_text.replace("ascii",inletKey)
+				stl_text = stl_text.replace("Visualization Toolkit generated SLA File",inletKey)
 				output_stl_object.write(stl_text)
 			output_stl_object.close()
+
+	# output keypoint as json file
+	for phase in phases:
+		if not os.path.exists(os.path.join(case_dir,phase)):
+			continue
+		with open(os.path.join(case_dir,phase,"inlets.json"),"w") as fp:
+			json.dump(key_point_list[phase], fp,indent=4)
 
 def main():
 	# # for comparison data
@@ -491,7 +515,8 @@ def main():
 	# for followup data
 	phases = ["baseline","baseline-post","12months","followup"]
 
-	dataList = os.listdir(data_dir)[0:]
+	# dataList = os.listdir(data_dir)[:]
+	dataList = ["ChanSP"]
 
 # 	dataList = ["LingKW_baseline-post","WongYK_followup"]
 
@@ -511,6 +536,8 @@ def main():
 
 		if batch_clip:
 			normalizeVessels(os.path.join(data_dir,case))
+
+		exit()
 
 if __name__=="__main__":
 	main()
