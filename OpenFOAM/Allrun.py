@@ -141,7 +141,15 @@ def run_case(case_dir, output_vtk=False, parallel=True, cores=4):
 		shutil.rmtree("./constant/polyMesh")
 	if os.path.exists("./constant/extendedFeatureEdgeMesh"):
 		shutil.rmtree("./constant/extendedFeatureEdgeMesh")
+	for folder in os.listdir("./"):
+		try:
+			if folder == "0":
+				continue
+			is_cfd_result = float(folder)
 
+			shutil.rmtree(os.path.join("./",folder))
+		except ValueError:
+			continue
 	# blockMesh
 	blockMeshDict_file = "./system/blockMeshDict"
 	result = edit_blockMeshDict(blockMeshDict_file, "./constant/triSurface/surface_capped.stl")
@@ -261,12 +269,17 @@ def run_case(case_dir, output_vtk=False, parallel=True, cores=4):
 	tgt_folder = os.path.join(case_dir,"CFD_OpenFOAM","log")
 	shutil.copytree(src_folder,tgt_folder)
 
+	src_folder = os.path.join("./","VTK")
+	tgt_folder = os.path.join(case_dir,"CFD_OpenFOAM","VTK")
+	shutil.copytree(src_folder,tgt_folder)
+
 	print("{}: CFD operation on {} complete".format(datetime.datetime.now(),case_dir))
 
 def main():
 	data_dir = "/mnt/DIIR-JK-NAS/data/intracranial/followup/medical"
 
 	phases = ["baseline", "baseline-post", "12months", "followup"]
+	# phases = ["followup"]
 
 	# for case in os.listdir(data_dir):
 	for case in ["ChanSP"]:

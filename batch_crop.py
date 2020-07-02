@@ -336,6 +336,18 @@ def normalizeVessels(case_dir):
 
 		kdTree = vtk.vtkKdTreePointLocator()
 		kdTree.SetDataSet(centerlines[key])
+
+		iD = kdTree.FindClosestPoint(bifPoint_list[key])
+		kdTree.Update()
+
+		bif_point_ = list(centerlines[key].GetPoint(iD))
+		bif_point_tangent_ = list(centerlines[key].GetPointData().GetArray("FrenetTangent").GetTuple(iD))
+		bif_point_normal_ = list(centerlines[key].GetPointData().GetArray("FrenetNormal").GetTuple(iD))
+		bif_point_binormal_ = list(centerlines[key].GetPointData().GetArray("FrenetBinormal").GetTuple(iD))
+
+		bif_point_dict = {"coordinate": bif_point_, "tangent": bif_point_tangent_, "normal": bif_point_normal_, "binormal": bif_point_binormal_}
+		key_point_list_.update({"BifurcationPoint": bif_point_dict})
+
 		iD = kdTree.FindClosestPoint(start_point)
 		kdTree.Update()
 
@@ -500,12 +512,8 @@ def normalizeVessels(case_dir):
 	# output keypoint as json file
 	for phase in phases:
 		if not os.path.exists(os.path.join(case_dir,phase)):
-			continue
-<<<<<<< HEAD
-		key_point_list[phase].update({"BifurcationPoint": {"coordinate": bifPoint_list[phase]}})
+				continue
 
-=======
->>>>>>> 2b0155a56854321b6b9a368d2436a8f0fe556e62
 		with open(os.path.join(case_dir,phase,"inlets.json"),"w") as fp:
 			json.dump(key_point_list[phase], fp,indent=4)
 
