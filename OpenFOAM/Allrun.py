@@ -116,7 +116,7 @@ def edit_snappyHexMeshDict(dictionary, inlet_json):
 			print(snappyHexMeshDict)
 
 	except IOError:
-		print(dictionary, "does not exist")
+		print(snappyHexMeshDict, "does not exist")
 		return 1
 
 def run_case(case_dir, output_vtk=False, parallel=True, cores=4):
@@ -144,6 +144,7 @@ def run_case(case_dir, output_vtk=False, parallel=True, cores=4):
 	# blockMesh
 	blockMeshDict_file = "./system/blockMeshDict"
 	result = edit_blockMeshDict(blockMeshDict_file, "./constant/triSurface/surface_capped.stl")
+
 	if result == 1:
 		print("blockMeshDict edit fail, case abort")
 		return

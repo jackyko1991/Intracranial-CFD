@@ -327,7 +327,6 @@ def normalizeVessels(case_dir):
 	connectedFilter.SetExtractionModeToClosestPointRegion()
 	connectedFilter.SetClosestPoint(bifPoint)
 	key_point_list = {}
-	key_point_list.update()
 
 	for key, surface in surfaces.items():
 		clipBoxes_ = {}
@@ -502,8 +501,11 @@ def normalizeVessels(case_dir):
 	for phase in phases:
 		if not os.path.exists(os.path.join(case_dir,phase)):
 			continue
+<<<<<<< HEAD
 		key_point_list[phase].update({"BifurcationPoint": {"coordinate": bifPoint_list[phase]}})
 
+=======
+>>>>>>> 2b0155a56854321b6b9a368d2436a8f0fe556e62
 		with open(os.path.join(case_dir,phase,"inlets.json"),"w") as fp:
 			json.dump(key_point_list[phase], fp,indent=4)
 
@@ -539,8 +541,6 @@ def main():
 
 		if batch_clip:
 			normalizeVessels(os.path.join(data_dir,case))
-
-		# exit()
 
 if __name__=="__main__":
 	main()
