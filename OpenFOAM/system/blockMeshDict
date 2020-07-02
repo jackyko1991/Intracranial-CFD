@@ -11,18 +11,70 @@ FoamFile
 
 convertToMeters 0.001;
 
+xmin -18.432899475097656;
+
+xmax -3.484189987182617;
+
+ymin -40.39979934692383;
+
+ymax -21.530099868774414;
+
+zmin -50.77470016479492;
+
+zmax -49.77470016479492;
+
 vertices
   (
-    (-18.5 -41 -50.5)
-    (-2.5 -41 -50.5)
-    (-2.5 -21.4 -50.5)
-    (-18.5 -21.4 -50.5)
-    (-18.5 -41 -29)
-    (-2.5 -41 -29)
-    (-2.5 -21.4 -29)
-    (-18.5 -21.4 -29)
+
+    (
+      $xmin
+      $ymin
+      $zmin
+    )
+
+    (
+      $xmax
+      $ymin
+      $zmin
+    )
+
+    (
+      $xmax
+      $ymax
+      $zmin
+    )
+
+    (
+      $xmin
+      $ymax
+      $zmin
+    )
+
+    (
+      $xmin
+      $ymin
+      $zmax
+    )
+
+    (
+      $xmax
+      $ymin
+      $zmax
+    )
+
+    (
+      $xmax
+      $ymax
+      $zmax
+    )
+
+    (
+      $xmin
+      $ymax
+      $zmax
+    )
   );
-  
+
 edges
   (
   );
@@ -44,16 +96,14 @@ blocks
     (10 10 10)
     simpleGrading
     (1 1 1)
-  ); 	// vertex numbers
-//number of cells in each direction
-// cell expansion ratios
+  ); 	// vertex numbers//number of cells in each direction// cell expansion ratios
 
 boundary
   (
-    frontAndBack
+    walls
 
     {
-      type slip;
+      type empty;
       faces
         (
 
@@ -65,38 +115,11 @@ boundary
           )
 
           (
-            1
-            5
-            4
-            0
-          )
-        ); 	// patch name
-// patch type
-// block face in this patch
-
-    }
-    leftWall
-
-    {
-      type slip;
-      faces
-        (
-
-          (
             0
             4
             7
             3
           )
-        );
-
-    }
-    rightWall
-
-    {
-      type slip;
-      faces
-        (
 
           (
             2
@@ -104,15 +127,13 @@ boundary
             5
             1
           )
-        );
 
-    }
-    upperWall
-
-    {
-      type slip;
-      faces
-        (
+          (
+            1
+            5
+            4
+            0
+          )
 
           (
             0
@@ -120,15 +141,6 @@ boundary
             2
             1
           )
-        );
-
-    }
-    lowerWall
-
-    {
-      type slip;
-      faces
-        (
 
           (
             4
@@ -139,5 +151,5 @@ boundary
         );
 
     }
-  );
+  ); 	//     frontAndBack//     {//       type slip;//       faces//         (//           (//             3//             7//             6//             2//           )//           (//             1//             5//             4//             0//           )//         ); 	// patch name// // patch type// // block face in this patch//     }//     leftWall//     {//       type slip;//       faces//         (//           (//             0//             4//             7//             3//           )//         );//     }//     rightWall//     {//       type slip;//       faces//         (//           (//             2//             6//             5//             1//           )//         );//     }//     upperWall//     {//       type slip;//       faces//         (//           (//             0//             3//             2//             1//           )//         );//     }//     lowerWall//     {//       type slip;//       faces//         (//           (//             4//             5//             6//             7//           )//         );//     }
 
