@@ -122,6 +122,7 @@ def edit_snappyHexMeshDict(dictionary, inlet_json):
 def run_case(case_dir, output_vtk=False, parallel=True, cores=4):
 	startTime = datetime.datetime.now()
 
+	print("********************************* OpenFOAM CFD Operation *********************************")
 	print("{}: Execute OpenFOAM CFD simulation on directory: {}".format(datetime.datetime.now(),case_dir))
 
 	# copy surface from case directory
@@ -231,6 +232,37 @@ def run_case(case_dir, output_vtk=False, parallel=True, cores=4):
 	endTime = datetime.datetime.now()
 	print("{}: Auto CFD pipeline complete, time elapsed: {}s".format(datetime.datetime.now(),(endTime-startTime).total_seconds()))
 
+	# copy result back to storage node
+	print("{}: Copying result files...".format(datetime.datetime.now()))
+
+	if os.path.exists(os.path.join(case_dir,"CFD_OpenFOAM")):
+		shutil.rmtree(os.path.join(case_dir,"CFD_OpenFOAM"), ignore_errors=True)
+	os.makedirs(os.path.join(case_dir,"CFD_OpenFOAM"))
+
+	for folder in os.listdir("./"):
+		try:
+			is_cfd_result = float(folder)
+
+			src_folder = os.path.join("./",folder)
+			tgt_folder = os.path.join(case_dir,"CFD_OpenFOAM",folder)
+			shutil.copytree(src_folder,tgt_folder)
+		except ValueError:
+			continue
+
+	src_file = os.path.join("./","OpenFOAM.OpenFOAM")
+	tgt_file = os.path.join(case_dir,"CFD_OpenFOAM","OpenFOAM.OpenFOAM")
+	shutil.copy(src_file,tgt_file)
+
+	src_folder = os.path.join("./","constant")
+	tgt_folder = os.path.join(case_dir,"CFD_OpenFOAM","constant")
+	shutil.copytree(src_folder,tgt_folder)
+
+	src_folder = os.path.join("./","log")
+	tgt_folder = os.path.join(case_dir,"CFD_OpenFOAM","log")
+	shutil.copytree(src_folder,tgt_folder)
+
+	print("{}: CFD operation on {} complete".format(datetime.datetime.now(),case_dir))
+
 def main():
 	data_dir = "/mnt/DIIR-JK-NAS/data/intracranial/followup/medical"
 
@@ -239,8 +271,10 @@ def main():
 	# for case in os.listdir(data_dir):
 	for case in ["ChanSP"]:
 		for phase in phases:
+			if not os.path.exists(os.path.join(data_dir,case,phase)):
+				continue
 			run_case(os.path.join(data_dir,case,phase),output_vtk=False, parallel=True, cores=4)
-			exit()
+		exit()
 
 if __name__ == "__main__":
 	main()
