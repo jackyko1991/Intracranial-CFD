@@ -139,6 +139,8 @@ def run_case(case_dir, output_vtk=False, parallel=True, cores=4):
 	print("{}: Cleaning workspace...".format(datetime.datetime.now()))
 	if os.path.exists("./0/vorticity"):
 		os.remove("./0/vorticity")
+	if os.path.exists("./0/wallShearStress"):
+		os.remove("./0/wallShearStress")
 	if os.path.exists("./constant/polyMesh"):
 		shutil.rmtree("./constant/polyMesh")
 	if os.path.exists("./constant/extendedFeatureEdgeMesh"):
@@ -296,13 +298,13 @@ def main():
 	phases = ["baseline", "baseline-post", "12months", "followup"]
 	# phases = ["followup"]
 
-	for case in os.listdir(data_dir)[:]:
+	for case in os.listdir(data_dir)[1:]:
 	# for case in ["ChanWK"]:
 		for phase in phases:
 			if not os.path.exists(os.path.join(data_dir,case,phase)):
 				continue
 			run_case(os.path.join(data_dir,case,phase),output_vtk=False, parallel=True, cores=4)
-			exit()
+			# exit()
 
 if __name__ == "__main__":
 	main()
