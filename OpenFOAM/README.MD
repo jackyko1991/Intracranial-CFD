@@ -21,7 +21,7 @@ This repository provides a fully automated CFD simulation pipeline using OpenFOA
 		- `snap`: Works on the cells at the walls to adapt their vertices to the initial geometry in order to obtain a smooth and realistic mesh surface (output as time point 2)
 		- `addLayers`: Refine the mesh to compute an accurate wall shear stress. The geometry of mesh is not altered but add layers of cells at the walls of the vessel domain. This process reduces the distance between the first nodes, hence corrects surface imperfections. (output as time point 3)
 	2. Execute `snappyHexMesh`. Use `snappyHexMesh -overwrite` to export final mesh only as time point 0.
-6. **Finite Element Analysis:** Execute `icoFoam` for CFD simulation.
+6. **Finite Element Analysis:** Execute `pisoFoam` for CFD simulation.
 7. **Output File (Optional):** 
 	1. The `Allrun.py` batch processing file will create `OpenFOAM.OpenFOAM` file in the case directory for Paraview visualization. Users manually perform the CFD workflow can create the file by `touch OpenFOAM.OpenFOAM`. 
 	2. The OpenFOAM result can be exported to VTK with command `foamToVTK`. Results will be exported to `<OpenFOAM-case-dir>/VTK`.
@@ -35,7 +35,7 @@ The parallel processing test is on a 6C12T devices with different subdomain conf
 2. `surfaceFeatureExtract`
 3. `decomposePar`
 4. `snappyHexMesh`
-5. `icoFoam`
+5. `pisoFoam`
 6. `reconstructParMesh`
 7. `reconstructPar`.
 
