@@ -137,6 +137,8 @@ def run_case(case_dir, output_vtk=False, parallel=True, cores=4):
 
 	# clean workspace
 	print("{}: Cleaning workspace...".format(datetime.datetime.now()))
+	if os.path.exists("./0/vorticity"):
+		os.remove("./0/vorticity")
 	if os.path.exists("./constant/polyMesh"):
 		shutil.rmtree("./constant/polyMesh")
 	if os.path.exists("./constant/extendedFeatureEdgeMesh"):
@@ -203,8 +205,11 @@ def run_case(case_dir, output_vtk=False, parallel=True, cores=4):
 
 		# CFD 
 		edit_velocity("./0/U", "./constant/inlets.json", velocity=1.8)
-		print("{}: Execute icoFoam in parallel...".format(datetime.datetime.now()))
-		os.system("foamJob -parallel -screen icoFoam > ./log/icoFoam.log")
+		# print("{}: Execute icoFoam in parallel...".format(datetime.datetime.now()))
+		# os.system("foamJob -parallel -screen icoFoam > ./log/icoFoam.log")
+
+		print("{}: Execute pisoFoam in parallel...".format(datetime.datetime.now()))
+		os.system("foamJob -parallel -screen pisoFoam > ./log/pisoFoam.log")
 
 		# reconstruct mesh surface in parallel run
 		print("{}: Reconstructing mesh from parallel run...".format(datetime.datetime.now()))
@@ -226,8 +231,18 @@ def run_case(case_dir, output_vtk=False, parallel=True, cores=4):
 		# run cfd
 		# need to edit initial velocity file
 		edit_velocity("./0/U", "./constant/inlets.json", velocity=1.8)
-		print("{}: Execute icoFoam...".format(datetime.datetime.now()))
-		os.system("icoFoam > ./log/icoFoam.log")
+		# print("{}: Execute icoFoam...".format(datetime.datetime.now()))
+		# os.system("icoFoam > ./log/icoFoam.log")
+
+		print("{}: Execute pisoFoam...".format(datetime.datetime.now()))
+		os.system("icoFoam > ./log/pisoFoam.log")
+
+	# post processing
+	print("{}: Computing vorticity...".format(datetime.datetime.now()))
+	os.system("pisoFoam -postProcess -func vorticity > ./log/vorticity.log")
+
+	print("{}: Computing wall shear stress...".format(datetime.datetime.now()))
+	os.system("pisoFoam -postProcess -func wallShearStress > ./log/wallShearStress.log")
 
 	# create OpenFOAM read fill for paraview
 	os.system("touch OpenFOAM.OpenFOAM")
@@ -281,13 +296,13 @@ def main():
 	phases = ["baseline", "baseline-post", "12months", "followup"]
 	# phases = ["followup"]
 
-	# for case in os.listdir(data_dir):
-	for case in ["ChanSP"]:
+	for case in os.listdir(data_dir)[:]:
+	# for case in ["ChanWK"]:
 		for phase in phases:
 			if not os.path.exists(os.path.join(data_dir,case,phase)):
 				continue
 			run_case(os.path.join(data_dir,case,phase),output_vtk=False, parallel=True, cores=4)
-		exit()
+			exit()
 
 if __name__ == "__main__":
 	main()

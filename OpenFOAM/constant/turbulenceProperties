@@ -11,13 +11,24 @@ FoamFile
     format      ascii;
     class       dictionary;
     location    "constant";
-    object      transportProperties;
+    object      turbulenceProperties;
 }
 // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
 
-transportModel  Newtonian;
+simulationType laminar;
 
-nu              [0 2 -1 0 0 0 0] 3.365e-6;
+// simulationType RAS;
+
+// RAS
+// {
+//     // Tested with kEpsilon, realizableKE, kOmega, kOmegaSST, v2f,
+//     // ShihQuadraticKE, LienCubicKE.
+//     RASModel        kEpsilon;
+
+//     turbulence      on;
+
+//     printCoeffs     on;
+// }
 
 
 // ************************************************************************* //

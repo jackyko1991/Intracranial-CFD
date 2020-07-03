@@ -53,3 +53,4 @@ Test results are as following:
 - Hemodynamics in the Thoracic Aorta using OpenFOAM: 4D PCMRI versus CFD (https://core.ac.uk/download/pdf/81582466.pdf)
 - OpenFOAM User Guide version 7 (http://foam.sourceforge.net/docs/Guides-a4/OpenFOAMUserGuide-A4.pdf)
 - Online OpenFOAM UserGuide (https://www.openfoam.com/documentation/user-guide/index.php)
+- OpenFOAM - open source CFD toolbox (https://events.prace-ri.eu/event/729/contributions/590/attachments/712/1015/Introduction_to_OpenFOAM_agrm_20180925.pdf)
