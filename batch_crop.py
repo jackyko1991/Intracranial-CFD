@@ -4,9 +4,10 @@ import vtk
 import math
 import numpy as np
 import json
+import trimesh
 
 # data_dir = "Z:/data/intracranial/followup/medical"
-data_dir = "/mnt/DIIR-JK-NAS/data/intracranial/followup/medical"
+data_dir = "/mnt/DIIR-JK-NAS/data/intracranial/followup/stent"
 binary_path = "D:/projects/CFD_intracranial/cxx/Vessel-Centerline-Extraction/build/Release/CenterlineExtraction.exe"
 dist_from_bif_inlet = 35
 dist_from_bif_outlet = 25
@@ -258,8 +259,6 @@ def normalizeVessels(case_dir):
 			start_point_normal = list(centerlines["baseline"].GetPointData().GetArray("FrenetNormal").GetTuple(i))
 			start_point_binormal = list(centerlines["baseline"].GetPointData().GetArray("FrenetBinormal").GetTuple(i))
 
-	print("start_point:",start_point)
-
 	# get the end point coordinates
 	end_ids = []
 	end_points = []
@@ -336,6 +335,18 @@ def normalizeVessels(case_dir):
 
 		kdTree = vtk.vtkKdTreePointLocator()
 		kdTree.SetDataSet(centerlines[key])
+
+		iD = kdTree.FindClosestPoint(bifPoint_list[key])
+		kdTree.Update()
+
+		bif_point_ = list(centerlines[key].GetPoint(iD))
+		bif_point_tangent_ = list(centerlines[key].GetPointData().GetArray("FrenetTangent").GetTuple(iD))
+		bif_point_normal_ = list(centerlines[key].GetPointData().GetArray("FrenetNormal").GetTuple(iD))
+		bif_point_binormal_ = list(centerlines[key].GetPointData().GetArray("FrenetBinormal").GetTuple(iD))
+
+		bif_point_dict = {"coordinate": bif_point_, "tangent": bif_point_tangent_, "normal": bif_point_normal_, "binormal": bif_point_binormal_}
+		key_point_list_.update({"BifurcationPoint": bif_point_dict})
+
 		iD = kdTree.FindClosestPoint(start_point)
 		kdTree.Update()
 
@@ -480,27 +491,39 @@ def normalizeVessels(case_dir):
 		for phase in phases:
 			if not os.path.exists(os.path.join(case_dir,phase,"surface_clipped.stl")):
 				continue
-
-			stl_text = open(os.path.join(case_dir,phase,"surface_clipped.stl")).read()
-			stl_text = stl_text.replace("ascii","vessel")
-			stl_text = stl_text.replace("Visualization Toolkit generated SLA File", "vessel")
-
 			os.remove(os.path.join(case_dir,phase,"surface_capped.stl"))
 
-			output_stl_object = open(os.path.join(case_dir,phase,"surface_capped.stl"),"a")
-			output_stl_object.write(stl_text)
+			# check nan and correct
+			mesh = trimesh.load_mesh(os.path.join(case_dir,phase,"surface_clipped.stl"))
+			mesh.process()
+			mesh.export(os.path.join(case_dir,phase,"surface_clipped.stl"), file_type='stl_ascii')
+
+			stl_text = open(os.path.join(case_dir,phase,"surface_clipped.stl")).read().splitlines(True)
+			stl_text[0] = "solid vessel\n"
+			stl_text.append("\n")
+
+			fout = open(os.path.join(case_dir,phase,"surface_capped.stl"), 'w')
+			fout.writelines(stl_text)
 
 			for inletKey in inletKeys:
-				stl_text = open(os.path.join(case_dir,phase,"boundary_cap_" + inletKey + ".stl")).read()
-				stl_text = stl_text.replace("ascii",inletKey)
-				stl_text = stl_text.replace("Visualization Toolkit generated SLA File",inletKey)
-				output_stl_object.write(stl_text)
-			output_stl_object.close()
+				# check nan and correct
+				mesh = trimesh.load_mesh(os.path.join(os.path.join(case_dir,phase,"boundary_cap_" + inletKey + ".stl")))
+				mesh.process()
+				mesh.export(os.path.join(case_dir,phase,"boundary_cap_" + inletKey + ".stl"), file_type='stl_ascii')
+
+				stl_text = open(os.path.join(case_dir,phase,"boundary_cap_" + inletKey + ".stl")).read().splitlines(True)
+				stl_text[0] = "solid " + inletKey + "\n"
+				stl_text.append("\n")
+
+				fout.writelines(stl_text)
+
+			fout.close()
 
 	# output keypoint as json file
 	for phase in phases:
 		if not os.path.exists(os.path.join(case_dir,phase)):
-			continue
+				continue
+
 		with open(os.path.join(case_dir,phase,"inlets.json"),"w") as fp:
 			json.dump(key_point_list[phase], fp,indent=4)
 
@@ -514,10 +537,10 @@ def main():
 
 	# for followup data
 	phases = ["baseline","baseline-post","12months","followup"]
+	# phases = ["followup"]
 
-	# dataList = os.listdir(data_dir)[:]
-	dataList = ["ChanSP"]
-
+	dataList = os.listdir(data_dir)[:]
+	# dataList = ["WongLK"]
 # 	dataList = ["LingKW_baseline-post","WongYK_followup"]
 
 	for case in dataList:
@@ -536,8 +559,6 @@ def main():
 
 		if batch_clip:
 			normalizeVessels(os.path.join(data_dir,case))
-
-		exit()
 
 if __name__=="__main__":
 	main()
