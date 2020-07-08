@@ -1,8 +1,6 @@
-# Intracranial-CFD
+# Intracranial CFD
 
-A simple tool to perform vessel segmentation based on 3DRA and post contrast CBCT data.
-
-## Usage
+A tool collection to perform vessel segmentation based on 3DRA and post contrast CBCT intracranial data. The repository also provides an OpenFOAM computational fluid simulation pipeline.
 
 ## Workflow
 1. Batch conversion of DICOM to NIFTI format
@@ -21,4 +19,5 @@ A simple tool to perform vessel segmentation based on 3DRA and post contrast CBC
 8. CFD simulation
 9. Probe CFD result along centerline
 7. Multiplanar reconstruction (MPR) with input image and the centerline to straighten the image data
-8. 
+
+## Usage

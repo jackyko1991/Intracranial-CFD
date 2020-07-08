@@ -19,13 +19,13 @@ solvers
 {
     p
     {
-        solver          PCG;
-        // solver          GAMG;
-        preconditioner  DIC;
+        // solver          PCG;
+        solver          GAMG;
+        // preconditioner  DIC;
         tolerance       1e-06;
         // tolerance       1e-07;
         relTol          0.05;
-        // relTol          0.01;
+        relTol          0.01;
         smoother GaussSeidel ;
         // nPreSweeps 0;
         // nPostSweeps 2;
@@ -38,19 +38,28 @@ solvers
     pFinal
     {
         $p;
+        tolerance       1e-06;
         relTol          0;
     }
 
-    U
+    // U
+    // {
+    //     solver          smoothSolver;
+    //     smoother        symGaussSeidel;
+    //     // smoother GaussSeidel ;
+    //     tolerance       1e-05;
+    //     // tolerance       1e-08;
+    //     relTol          0;
+    //     // relTol 0.1;
+    //     // nSweeps 1;
+    // }
+
+    "(U|k|epsilon|omega|R|nuTilda)"
     {
         solver          smoothSolver;
-        smoother        symGaussSeidel;
-        // smoother GaussSeidel ;
+        smoother        GaussSeidel;
         tolerance       1e-05;
-        // tolerance       1e-08;
         relTol          0;
-        // relTol 0.1;
-        // nSweeps 1;
     }
 }
 
