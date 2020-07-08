@@ -4,6 +4,7 @@ from PyFoam.RunDictionary.ParsedBlockMeshDict import ParsedBlockMeshDict
 from PyFoam.RunDictionary.ParsedParameterFile import ParsedParameterFile
 import vtk
 import datetime
+import json
 
 def edit_blockMeshDict(dictionary, stl, edge_buffer=2):
 	try:
@@ -69,30 +70,94 @@ def edit_decompseParDict(dictionary, cores=4):
 			print(decompseParDict)
 
 	except IOError:
-		print(blockMeshDict_file, "does not exist")
+		print(dictionary, "does not exist")
 		return 1	
+
+def edit_velocity(dictionary, inlet_json, velocity=1):
+	try:
+		print("{}: Editing velocity file: {}".format(datetime.datetime.now(),dictionary))
+		velocityDict = ParsedParameterFile(dictionary)
+
+		with open(inlet_json, 'r') as f:
+			inlet_dict = json.load(f)
+
+		velocityDict["boundaryField"]["ICA"]["value"] = "uniform (" + \
+			str(inlet_dict["ICA"]["tangent"][0]/1000*velocity) + " " + \
+			str(inlet_dict["ICA"]["tangent"][1]/1000*velocity) + " " + \
+			str(inlet_dict["ICA"]["tangent"][2]/1000*velocity) + ")"
+
+		try:
+			velocityDict.writeFile()
+		except IOError:
+			print("Can't write file. Content would have been:")
+			print(velocityDict)
+
+	except IOError:
+		print(dictionary, "does not exist")
+		return 1
+
+def edit_snappyHexMeshDict(dictionary, inlet_json):
+	try:
+		print("{}: Editing snappyHexMeshDict file: {}".format(datetime.datetime.now(),dictionary))
+		snappyHexMeshDict = ParsedParameterFile(dictionary)
+
+		with open(inlet_json, 'r') as f:
+			inlet_dict = json.load(f)
+
+		snappyHexMeshDict["castellatedMeshControls"]["locationInMesh"] = "(" + \
+			str(inlet_dict["BifurcationPoint"]["coordinate"][0]/1000) + " " + \
+			str(inlet_dict["BifurcationPoint"]["coordinate"][1]/1000) + " " + \
+			str(inlet_dict["BifurcationPoint"]["coordinate"][2]/1000) + ")"
+
+		try:
+			snappyHexMeshDict.writeFile()
+		except IOError:
+			print("Can't write file. Content would have been:")
+			print(snappyHexMeshDict)
+
+	except IOError:
+		print(snappyHexMeshDict, "does not exist")
+		return 1
 
 def run_case(case_dir, output_vtk=False, parallel=True, cores=4):
 	startTime = datetime.datetime.now()
 
+	print("********************************* OpenFOAM CFD Operation *********************************")
 	print("{}: Execute OpenFOAM CFD simulation on directory: {}".format(datetime.datetime.now(),case_dir))
 
 	# copy surface from case directory
 	print("{}: Copying necessary files...".format(datetime.datetime.now()))
 	source_file = os.path.join(case_dir,"surface_capped.stl")
-	target_file = os.path.join("./constant/triSurface/surface_capped.stl")
+	target_file = "./constant/triSurface/surface_capped.stl"
+	shutil.copy(source_file, target_file)
+
+	source_file = os.path.join(case_dir,"inlets.json")
+	target_file = "./constant/inlets.json"
 	shutil.copy(source_file, target_file)
 
 	# clean workspace
 	print("{}: Cleaning workspace...".format(datetime.datetime.now()))
+	if os.path.exists("./0/vorticity"):
+		os.remove("./0/vorticity")
+	if os.path.exists("./0/wallShearStress"):
+		os.remove("./0/wallShearStress")
 	if os.path.exists("./constant/polyMesh"):
 		shutil.rmtree("./constant/polyMesh")
 	if os.path.exists("./constant/extendedFeatureEdgeMesh"):
 		shutil.rmtree("./constant/extendedFeatureEdgeMesh")
+	for folder in os.listdir("./"):
+		try:
+			if folder == "0":
+				continue
+			is_cfd_result = float(folder)
 
+			shutil.rmtree(os.path.join("./",folder))
+		except ValueError:
+			continue
 	# blockMesh
 	blockMeshDict_file = "./system/blockMeshDict"
-	result = edit_blockMeshDict(blockMeshDict_file, target_file)
+	result = edit_blockMeshDict(blockMeshDict_file, "./constant/triSurface/surface_capped.stl")
+
 	if result == 1:
 		print("blockMeshDict edit fail, case abort")
 		return
@@ -119,6 +184,7 @@ def run_case(case_dir, output_vtk=False, parallel=True, cores=4):
 		os.system("decomposePar > ./log/decomposePar.log")
 
 		# need to edit snappyHexMesh file for meshing
+		edit_snappyHexMeshDict("./system/snappyHexMeshDict", "./constant/inlets.json")
 		print("{}: Execute snappyHexMesh in parallel...".format(datetime.datetime.now()))
 		os.system("foamJob -parallel -screen snappyHexMesh -overwrite > ./log/snappyHexMesh.log")
 		# os.system("foamJob -parallel snappyHexMesh -overwrite")
@@ -139,8 +205,13 @@ def run_case(case_dir, output_vtk=False, parallel=True, cores=4):
 		print("{}: Execute decompsePar...".format(datetime.datetime.now()))
 		os.system("decomposePar > ./log/decomposePar.log")
 
-		print("{}: Execute icoFoam in parallel...".format(datetime.datetime.now()))
-		os.system("foamJob -parallel -screen icoFoam > ./log/icoFoam.log")
+		# CFD 
+		edit_velocity("./0/U", "./constant/inlets.json", velocity=1.8)
+		# print("{}: Execute icoFoam in parallel...".format(datetime.datetime.now()))
+		# os.system("foamJob -parallel -screen icoFoam > ./log/icoFoam.log")
+
+		print("{}: Execute pisoFoam in parallel...".format(datetime.datetime.now()))
+		os.system("foamJob -parallel -screen pisoFoam > ./log/pisoFoam.log")
 
 		# reconstruct mesh surface in parallel run
 		print("{}: Reconstructing mesh from parallel run...".format(datetime.datetime.now()))
@@ -155,13 +226,25 @@ def run_case(case_dir, output_vtk=False, parallel=True, cores=4):
 
 	else:
 		# need to edit snappyHexMesh file for meshing
+		edit_snappyHexMeshDict("./system/snappyHexMeshDict", "./constant/inlets.json")
 		print("{}: Execute snappyHexMesh...".format(datetime.datetime.now()))
 		os.system("snappyHexMesh -overwrite > ./log/snappyHexMesh.log")
 
 		# run cfd
 		# need to edit initial velocity file
-		print("{}: Execute icoFoam...".format(datetime.datetime.now()))
-		os.system("icoFoam > ./log/icoFoam.log")
+		edit_velocity("./0/U", "./constant/inlets.json", velocity=1.8)
+		# print("{}: Execute icoFoam...".format(datetime.datetime.now()))
+		# os.system("icoFoam > ./log/icoFoam.log")
+
+		print("{}: Execute pisoFoam...".format(datetime.datetime.now()))
+		os.system("icoFoam > ./log/pisoFoam.log")
+
+	# post processing
+	print("{}: Computing vorticity...".format(datetime.datetime.now()))
+	os.system("pisoFoam -postProcess -func vorticity > ./log/vorticity.log")
+
+	print("{}: Computing wall shear stress...".format(datetime.datetime.now()))
+	os.system("pisoFoam -postProcess -func wallShearStress > ./log/wallShearStress.log")
 
 	# create OpenFOAM read fill for paraview
 	os.system("touch OpenFOAM.OpenFOAM")
@@ -174,16 +257,54 @@ def run_case(case_dir, output_vtk=False, parallel=True, cores=4):
 	endTime = datetime.datetime.now()
 	print("{}: Auto CFD pipeline complete, time elapsed: {}s".format(datetime.datetime.now(),(endTime-startTime).total_seconds()))
 
+	# copy result back to storage node
+	print("{}: Copying result files...".format(datetime.datetime.now()))
+
+	if os.path.exists(os.path.join(case_dir,"CFD_OpenFOAM")):
+		shutil.rmtree(os.path.join(case_dir,"CFD_OpenFOAM"), ignore_errors=True)
+	os.makedirs(os.path.join(case_dir,"CFD_OpenFOAM"))
+
+	for folder in os.listdir("./"):
+		try:
+			is_cfd_result = float(folder)
+
+			src_folder = os.path.join("./",folder)
+			tgt_folder = os.path.join(case_dir,"CFD_OpenFOAM",folder)
+			shutil.copytree(src_folder,tgt_folder)
+		except ValueError:
+			continue
+
+	src_file = os.path.join("./","OpenFOAM.OpenFOAM")
+	tgt_file = os.path.join(case_dir,"CFD_OpenFOAM","OpenFOAM.OpenFOAM")
+	shutil.copy(src_file,tgt_file)
+
+	src_folder = os.path.join("./","constant")
+	tgt_folder = os.path.join(case_dir,"CFD_OpenFOAM","constant")
+	shutil.copytree(src_folder,tgt_folder)
+
+	src_folder = os.path.join("./","log")
+	tgt_folder = os.path.join(case_dir,"CFD_OpenFOAM","log")
+	shutil.copytree(src_folder,tgt_folder)
+
+	src_folder = os.path.join("./","VTK")
+	tgt_folder = os.path.join(case_dir,"CFD_OpenFOAM","VTK")
+	shutil.copytree(src_folder,tgt_folder)
+
+	print("{}: CFD operation on {} complete".format(datetime.datetime.now(),case_dir))
+
 def main():
-	data_dir = "/mnt/DIIR-JK-NAS/data/intracranial/followup/medical"
+	data_dir = "/mnt/DIIR-JK-NAS/data/intracranial/followup/stent"
 
 	phases = ["baseline", "baseline-post", "12months", "followup"]
+	# phases = ["followup"]
 
-	# for case in os.listdir(data_dir):
-	for case in ["ChanSP"]:
+	for case in os.listdir(data_dir)[1:]:
+	# for case in ["ChanWK"]:
 		for phase in phases:
-			run_case(os.path.join(data_dir,case,phase),output_vtk=False, parallel=True, cores=4)
-			exit()
+			if not os.path.exists(os.path.join(data_dir,case,phase)):
+				continue
+			run_case(os.path.join(data_dir,case,phase),output_vtk=True, parallel=True, cores=4)
+			# exit()
 
 if __name__ == "__main__":
 	main()
