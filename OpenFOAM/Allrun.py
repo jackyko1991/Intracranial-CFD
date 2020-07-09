@@ -293,7 +293,7 @@ def run_case(case_dir, output_vtk=False, parallel=True, cores=4):
 	print("{}: CFD operation on {} complete".format(datetime.datetime.now(),case_dir))
 
 def main():
-	data_dir = "/mnt/DIIR-JK-NAS/data/intracranial/followup/medical"
+	data_dir = "/mnt/DIIR-JK-NAS/data/intracranial/followup/stent"
 
 	phases = ["baseline", "baseline-post", "12months", "followup"]
 	# phases = ["followup"]
@@ -303,7 +303,7 @@ def main():
 		for phase in phases:
 			if not os.path.exists(os.path.join(data_dir,case,phase)):
 				continue
-			run_case(os.path.join(data_dir,case,phase),output_vtk=False, parallel=True, cores=4)
+			run_case(os.path.join(data_dir,case,phase),output_vtk=True, parallel=True, cores=4)
 			# exit()
 
 if __name__ == "__main__":

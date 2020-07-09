@@ -7,7 +7,7 @@ import json
 import trimesh
 
 # data_dir = "Z:/data/intracranial/followup/medical"
-data_dir = "/mnt/DIIR-JK-NAS/data/intracranial/followup/medical"
+data_dir = "/mnt/DIIR-JK-NAS/data/intracranial/followup/stent"
 binary_path = "D:/projects/CFD_intracranial/cxx/Vessel-Centerline-Extraction/build/Release/CenterlineExtraction.exe"
 dist_from_bif_inlet = 35
 dist_from_bif_outlet = 25
@@ -258,8 +258,6 @@ def normalizeVessels(case_dir):
 			start_point_tangent = list(centerlines["baseline"].GetPointData().GetArray("FrenetTangent").GetTuple(i))
 			start_point_normal = list(centerlines["baseline"].GetPointData().GetArray("FrenetNormal").GetTuple(i))
 			start_point_binormal = list(centerlines["baseline"].GetPointData().GetArray("FrenetBinormal").GetTuple(i))
-
-	print("start_point:",start_point)
 
 	# get the end point coordinates
 	end_ids = []
