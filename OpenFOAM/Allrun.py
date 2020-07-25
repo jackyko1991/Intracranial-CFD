@@ -74,6 +74,14 @@ def edit_decompseParDict(dictionary, cores=4):
 		return 1	
 
 def edit_velocity(dictionary, inlet_json, velocity=1):
+	"""
+	Edit the initial velocity file for CFD simulation
+
+	:param str dictionary: File path of the velocity dictionary, (0/U)
+	:param str inlet_json: File path of vessel inlet description json
+	:param float velocity: Inlet velocity magnitude (cm/s)
+	"""
+
 	try:
 		print("{}: Editing velocity file: {}".format(datetime.datetime.now(),dictionary))
 		velocityDict = ParsedParameterFile(dictionary)
@@ -82,9 +90,9 @@ def edit_velocity(dictionary, inlet_json, velocity=1):
 			inlet_dict = json.load(f)
 
 		velocityDict["boundaryField"]["ICA"]["value"] = "uniform (" + \
-			str(inlet_dict["ICA"]["tangent"][0]/1000*velocity) + " " + \
-			str(inlet_dict["ICA"]["tangent"][1]/1000*velocity) + " " + \
-			str(inlet_dict["ICA"]["tangent"][2]/1000*velocity) + ")"
+			str(inlet_dict["ICA"]["tangent"][0]/100*velocity) + " " + \
+			str(inlet_dict["ICA"]["tangent"][1]/100*velocity) + " " + \
+			str(inlet_dict["ICA"]["tangent"][2]/100*velocity) + ")"
 
 		try:
 			velocityDict.writeFile()
@@ -206,7 +214,7 @@ def run_case(case_dir, output_vtk=False, parallel=True, cores=4):
 		os.system("decomposePar > ./log/decomposePar.log")
 
 		# CFD 
-		edit_velocity("./0/U", "./constant/inlets.json", velocity=1.8)
+		edit_velocity("./0/U", "./constant/inlets.json", velocity=32.53)
 		# print("{}: Execute icoFoam in parallel...".format(datetime.datetime.now()))
 		# os.system("foamJob -parallel -screen icoFoam > ./log/icoFoam.log")
 
@@ -232,7 +240,7 @@ def run_case(case_dir, output_vtk=False, parallel=True, cores=4):
 
 		# run cfd
 		# need to edit initial velocity file
-		edit_velocity("./0/U", "./constant/inlets.json", velocity=1.8)
+		edit_velocity("./0/U", "./constant/inlets.json", velocity=32.53)
 		# print("{}: Execute icoFoam...".format(datetime.datetime.now()))
 		# os.system("icoFoam > ./log/icoFoam.log")
 
@@ -286,20 +294,21 @@ def run_case(case_dir, output_vtk=False, parallel=True, cores=4):
 	tgt_folder = os.path.join(case_dir,"CFD_OpenFOAM","log")
 	shutil.copytree(src_folder,tgt_folder)
 
-	src_folder = os.path.join("./","VTK")
-	tgt_folder = os.path.join(case_dir,"CFD_OpenFOAM","VTK")
-	shutil.copytree(src_folder,tgt_folder)
+	if output_vtk:
+		src_folder = os.path.join("./","VTK")
+		tgt_folder = os.path.join(case_dir,"CFD_OpenFOAM","VTK")
+		shutil.copytree(src_folder,tgt_folder)
 
 	print("{}: CFD operation on {} complete".format(datetime.datetime.now(),case_dir))
 
 def main():
-	data_dir = "/mnt/DIIR-JK-NAS/data/intracranial/followup/stent"
+	data_dir = "/mnt/DIIR-JK-NAS/data/intracranial/followup/medical"
 
 	phases = ["baseline", "baseline-post", "12months", "followup"]
-	# phases = ["followup"]
+	# phases = ["baseline"]
 
-	for case in os.listdir(data_dir)[1:]:
-	# for case in ["ChanWK"]:
+	# for case in os.listdir(data_dir)[1:]:
+	for case in ["ChowLM"]:
 		for phase in phases:
 			if not os.path.exists(os.path.join(data_dir,case,phase)):
 				continue
