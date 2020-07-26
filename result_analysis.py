@@ -8,6 +8,7 @@ from vtk.util.numpy_support import vtk_to_numpy
 import pandas as pd
 import matplotlib.pyplot as plt
 import math
+import json
 
 def readCSV(path):
 	f = open(path, 'rb')
@@ -125,7 +126,7 @@ class MyInteractorStyle(vtk.vtkInteractorStyleTrackballCamera):
 
 		return
 
-def plot_centerline_result(centerline, array_names):
+def plot_centerline_result(centerline, array_names, result_path,minPoint=(0,0,0),bifurcationPoint=(0,0,0)):
 	# extract ica
 	thresholdFilter = vtk.vtkThreshold()
 	thresholdFilter.ThresholdBetween(1,1)
@@ -136,8 +137,27 @@ def plot_centerline_result(centerline, array_names):
 	x = vtk_to_numpy(thresholdFilter.GetOutput().GetPointData().GetArray("Abscissas_average"))
 	x = [(value - x[0]) for value in x]
 	
+	kDTree = vtk.vtkKdTreePointLocator()
+	kDTree.SetDataSet(centerline)
+	kDTree.BuildLocator()
+
+	# get the abscissas of bifurcation point
+	if bifurcationPoint != (0,0,0):
+		iD = kDTree.FindClosestPoint(bifurcationPoint)
+		# Get the id of the closest point
+		bifPointAbscissas = kDTree.GetDataSet().GetPointData().GetArray("Abscissas_average").GetTuple(iD)[0] - \
+			vtk_to_numpy(thresholdFilter.GetOutput().GetPointData().GetArray("Abscissas_average"))[0]
+
+	# get the abscissas of min point
+	if minPoint != (0,0,0):
+		iD = kDTree.FindClosestPoint(minPoint)
+		# Get the id of the closest point
+		minPointAbscissas = kDTree.GetDataSet().GetPointData().GetArray("Abscissas_average").GetTuple(iD)[0] - \
+			vtk_to_numpy(thresholdFilter.GetOutput().GetPointData().GetArray("Abscissas_average"))[0]
+
 	fig, axs = plt.subplots(len(array_names),1)
 	fig.suptitle("CFD result")
+	fig.set_size_inches(10,8)
 
 	for i in range(len(array_names)):
 		y = vtk_to_numpy(thresholdFilter.GetOutput().GetPointData().GetArray(array_names[i]))
@@ -145,15 +165,13 @@ def plot_centerline_result(centerline, array_names):
 		if len(y.shape) > 1:
 			if y.shape[1] == 3:
 				y = [math.sqrt(value[0]**2 + value[1]**2 +value[2]**2 ) for value in y]
-
-		print(y)
+				
 		if len(array_names) == 1:
 			ax = axs
 		else:
 			ax = axs[i]
 
 		ax.plot(x,y)
-		ax.set_xlabel("Abscissas (mm)")
 
 		if array_names[i] == "Radius_average":
 			ylabel = "Radius (mm)"
@@ -168,14 +186,26 @@ def plot_centerline_result(centerline, array_names):
 			ylabel = "vorticity (s^-1)"
 			ymax = 1000
 
+		if bifurcationPoint !=(0,0,0):
+			ax.axvline(x=bifPointAbscissas,ymin=0,ymax=ymax,linestyle ="--",color='m')
+
+		if minPoint !=(0,0,0):
+			ax.axvline(x=minPointAbscissas,ymin=0,ymax=ymax,linestyle ="--",color='c')
+
 		ax.set_ylabel(ylabel)
+		if i == (len(array_names)-1):
+			ax.set_xlabel("Abscissas (mm)")
+		else:
+			ax.set_xticklabels([])
 		ax.set_xlim(x[0],x[-1])
 		ax.set_ylim(0,ymax)
+		
+	# save the plot 
+	plt.savefig(result_path,dpi=100)
+	plt.clf()
+	plt.close("all")
 
-	plt.show()
-
-
-def centerline_probe_result(centerline_file,vtk_file_list, output_dir):
+def centerline_probe_result(centerline_file,vtk_file_list, output_dir,minPoint=(0,0,0), bifurcationPoint=(0,0,0)):
 	# read centerline
 	centerlineReader = vtk.vtkXMLPolyDataReader()
 	centerlineReader.SetFileName(centerline_file)
@@ -257,11 +287,17 @@ def centerline_probe_result(centerline_file,vtk_file_list, output_dir):
 	writer.SetFileName(centerline_output_path)
 	writer.Update()
 
-	# plot result
-	centerline_average = averageFilter.GetOutput()
-	print(centerline_average)
+	# compute mean values
 
-	plot_centerline_result(centerline_average,["Radius_average","U_average","p(mmHg)_average","vorticity_average"])
+
+	# plot result
+	plot_result_path = os.path.join(os.path.dirname(centerline_file),output_dir,"result.png")
+	plot_centerline_result(
+		averageFilter.GetOutput(),
+		["Radius_average","U_average","p(mmHg)_average","vorticity_average"], 
+		plot_result_path,
+		minPoint = minPoint,
+		bifurcationPoint = bifurcationPoint)
 
 	# os.system("pause")
 	exit()
@@ -279,7 +315,6 @@ def result_analysis(case_dir, minPoint=(0,0,0), maxPoint=(0,0,0)):
 	# centerline = centerlineReader.GetOutput()
 	# centerline.GetCellData().SetScalars(centerline.GetCellData().GetArray(2));
 	# centerline.GetPointData().SetScalars(centerline.GetPointData().GetArray("Abscissas"));
-	# print(centerline)
 
 	# surfaceReader = vtk.vtkSTLReader()
 	# surfaceReader.SetFileName(surface)
@@ -416,13 +451,23 @@ def result_analysis(case_dir, minPoint=(0,0,0), maxPoint=(0,0,0)):
 
 	# print("{}: min radius = {} mm, Degree of stenosis = {} %".format(timePoint,minRadius,DoS))
 
+	# load inlet json file
+	with open(os.path.join(case_dir,"inlets.json")) as f:
+		inlets = json.load(f)
+
 	# load last 5 time points and take average
 	results_vtk = []
 
 	for time in range(0,201,10):
 		results_vtk.append(os.path.join(case_dir,"CFD_OpenFOAM", "VTK","OpenFoam_" + str(time)+".vtk"))
 	
-	centerline_probe_result(os.path.join(case_dir,"centerline_clipped.vtp"),results_vtk[-5:],output_dir)
+	centerline_probe_result(
+		os.path.join(case_dir,"centerline_clipped.vtp"),
+		results_vtk[-5:],
+		output_dir, 
+		minPoint=minPoint,
+		bifurcationPoint=inlets["BifurcationPoint"]["coordinate"]
+		)
 
 	return {}
 	
