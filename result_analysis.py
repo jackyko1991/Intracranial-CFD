@@ -287,9 +287,6 @@ def centerline_probe_result(centerline_file,vtk_file_list, output_dir,minPoint=(
 	writer.SetFileName(centerline_output_path)
 	writer.Update()
 
-	# compute mean values
-
-
 	# plot result
 	plot_result_path = os.path.join(os.path.dirname(centerline_file),output_dir,"result.png")
 	plot_centerline_result(
@@ -299,10 +296,35 @@ def centerline_probe_result(centerline_file,vtk_file_list, output_dir,minPoint=(
 		minPoint = minPoint,
 		bifurcationPoint = bifurcationPoint)
 
-	# os.system("pause")
-	exit()
 
-	return
+	# extract ica
+	thresholdFilter = vtk.vtkThreshold()
+	thresholdFilter.ThresholdBetween(1,1)
+	thresholdFilter.SetInputData(averageFilter.GetOutput())
+	thresholdFilter.SetInputArrayToProcess(0, 0, 0, vtk.vtkDataObject.FIELD_ASSOCIATION_CELLS, "CenterlineIds_average")
+	thresholdFilter.Update()
+
+	# compute result values
+	radius = vtk_to_numpy(thresholdFilter.GetOutput().GetPointData().GetArray("Radius_average"))
+	pressure = vtk_to_numpy(thresholdFilter.GetOutput().GetPointData().GetArray("p(mmHg)_average"))
+	velocity = vtk_to_numpy(thresholdFilter.GetOutput().GetPointData().GetArray("U_average"))
+	velocity = [math.sqrt(value[0]**2 + value[1]**2 +value[2]**2 ) for value in velocity]
+	vorticity = vtk_to_numpy(thresholdFilter.GetOutput().GetPointData().GetArray("vorticity_average"))
+	vorticity = [math.sqrt(value[0]**2 + value[1]**2 +value[2]**2 ) for value in vorticity]
+
+	return_value = {
+		'radius mean(mm)': np.mean(radius),
+		'radius min(mm)': np.min(radius),
+		'pressure mean(mmHg)': np.mean(pressure),
+		'max pressure gradient(mmHg)': np.mean(heapq.nlargest(5, pressure)) - np.mean(heapq.nsmallest(5,pressure)),
+		'in/out pressure gradient(mmHg)': np.mean(pressure[0:5])/np.mean(pressure[-5:-1]),
+		'velocity mean(ms^-1)': np.mean(velocity),
+		'peak velocity(ms^-1)': np.mean(heapq.nlargest(5, velocity)),
+		'vorticity mean(s^-1)': np.mean(vorticity),
+		'peak vorticity(s^-1)': np.mean(heapq.nlargest(5, vorticity))
+	}
+
+	return return_value
 
 def result_analysis(case_dir, minPoint=(0,0,0), maxPoint=(0,0,0)):
 	centerline = os.path.join(case_dir, "centerline_clipped.vtp")
@@ -461,7 +483,7 @@ def result_analysis(case_dir, minPoint=(0,0,0), maxPoint=(0,0,0)):
 	for time in range(0,201,10):
 		results_vtk.append(os.path.join(case_dir,"CFD_OpenFOAM", "VTK","OpenFoam_" + str(time)+".vtk"))
 	
-	centerline_probe_result(
+	return_value = centerline_probe_result(
 		os.path.join(case_dir,"centerline_clipped.vtp"),
 		results_vtk[-5:],
 		output_dir, 
@@ -469,7 +491,7 @@ def result_analysis(case_dir, minPoint=(0,0,0), maxPoint=(0,0,0)):
 		bifurcationPoint=inlets["BifurcationPoint"]["coordinate"]
 		)
 
-	return {}
+	return return_value
 	
 def main():
 	group = "medical"
@@ -496,6 +518,7 @@ def main():
 			
 			row = {"patient": case, "group": group, "time point": timePoint}
 			result = result_analysis(os.path.join(data_folder,case,timePoint))
+			row.update(result)
 			
 			result_df = result_df.append(pd.Series(row),ignore_index=True)
 			result_df.to_csv(output_file,index=False)
