@@ -25,6 +25,10 @@ def edit_blockMeshDict(dictionary, stl, edge_buffer=2):
 		blockMeshDict["zmin"] =  bounds[4]-edge_buffer;
 		blockMeshDict["zmax"] =  bounds[5]+edge_buffer;
 
+		blocks = blockMeshDict["blocks"]
+		blocks[2] = '(15 15 15)'
+		blockMeshDict["blocks"] = blocks
+
 		try:
 			blockMeshDict.writeFile()
 		except IOError:
@@ -302,13 +306,15 @@ def run_case(case_dir, output_vtk=False, parallel=True, cores=4):
 	print("{}: CFD operation on {} complete".format(datetime.datetime.now(),case_dir))
 
 def main():
-	data_dir = "/mnt/DIIR-JK-NAS/data/intracranial/followup/medical"
+	tx_type = "medical"
+
+	data_dir = "/mnt/DIIR-JK-NAS/data/intracranial/followup/{}".format(tx_type)
 
 	phases = ["baseline", "baseline-post", "12months", "followup"]
-	# phases = ["baseline"]
+	# phases = ["followup"]
 
-	# for case in os.listdir(data_dir)[1:]:
-	for case in ["ChowLM"]:
+	for case in os.listdir(data_dir)[0:]:
+	# for case in ["WongLK"]:
 		for phase in phases:
 			if not os.path.exists(os.path.join(data_dir,case,phase)):
 				continue
