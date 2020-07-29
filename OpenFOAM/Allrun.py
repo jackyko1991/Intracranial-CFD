@@ -311,7 +311,7 @@ def main():
 	data_dir = "/mnt/DIIR-JK-NAS/data/intracranial/followup/{}".format(tx_type)
 
 	phases = ["baseline", "baseline-post", "12months", "followup"]
-	phases = ["baseline"]
+	# phases = ["followup"]
 
 	for case in os.listdir(data_dir)[0:]:
 	# for case in ["WongLK"]:
