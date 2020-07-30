@@ -326,152 +326,158 @@ def centerline_probe_result(centerline_file,vtk_file_list, output_dir,minPoint=(
 
 	return return_value
 
-def result_analysis(case_dir, minPoint=(0,0,0), maxPoint=(0,0,0)):
+def probe_min_max_point(centerline_filename, surface_filename, minPoint = (0,0,0), maxPoint = (0,0,0)):
+	centerlineReader = vtk.vtkXMLPolyDataReader()
+	centerlineReader.SetFileName(centerline)
+	centerlineReader.Update()
+	centerline = centerlineReader.GetOutput()
+	centerline.GetCellData().SetScalars(centerline.GetCellData().GetArray(2));
+	centerline.GetPointData().SetScalars(centerline.GetPointData().GetArray("Abscissas"));
+
+	surfaceReader = vtk.vtkSTLReader()
+	surfaceReader.SetFileName(surface)
+	surfaceReader.Update()
+	surface = surfaceReader.GetOutput()
+
+	lut = vtk.vtkLookupTable()
+	# lut.SetNumberOfTableValues(3);
+	lut.Build()
+
+	# Fill in a few known colors, the rest will be generated if needed
+	# lut.SetTableValue(0, 1.0000, 0     , 0, 1);  
+	# lut.SetTableValue(1, 0.0000, 1.0000, 0.0000, 1);
+	# lut.SetTableValue(2, 0.0000, 0.0000, 1.0000, 1); 
+
+	centerlineMapper = vtk.vtkPolyDataMapper()
+	centerlineMapper.SetInputData(centerline)
+	centerlineMapper.SetScalarRange(0, centerline.GetPointData().GetScalars().GetMaxNorm());
+	centerlineMapper.SetLookupTable(lut);
+	centerlineMapper.SetScalarModeToUsePointData()
+
+	surfaceMapper = vtk.vtkPolyDataMapper()
+	surfaceMapper.SetInputData(surface)
+
+	scalarBar = vtk.vtkScalarBarActor()
+	scalarBar.SetLookupTable(centerlineMapper.GetLookupTable());
+	scalarBar.SetTitle("Abscissas");
+	scalarBar.SetNumberOfLabels(4);
+	scalarBar.SetWidth(0.08)
+	scalarBar.SetHeight(0.6)
+	scalarBar.SetPosition(0.9,0.1)
+
+	# auto find the smallest radius point
+	radius = centerline.GetPointData().GetArray("Radius")
+
+	# build kd tree to locate the nearest point
+	# Create kd tree
+	kDTree = vtk.vtkKdTreePointLocator()
+	kDTree.SetDataSet(centerline)
+	kDTree.BuildLocator()
+
+	minSource = vtk.vtkSphereSource()
+	if minPoint == (0,0,0):
+		minIdx = vtkArrayMin(radius)
+		closestPoint = centerline.GetPoint(minIdx)
+	else:
+		# Find the closest point to the picked point
+		iD = kDTree.FindClosestPoint(minPoint)
+
+		# Get the id of the closest point
+		closestPoint = kDTree.GetDataSet().GetPoint(iD)
+
+	minSource.SetCenter(closestPoint)
+	minSource.SetRadius(0.3);
+	minMapper = vtk.vtkPolyDataMapper()
+	minMapper.SetInputConnection(minSource.GetOutputPort());
+	minActor = vtk.vtkActor()
+	minActor.SetMapper(minMapper);
+	minActor.GetProperty().SetColor((1.0,0.0,0.0))
+
+	maxSource = vtk.vtkSphereSource()
+	if maxPoint == (0,0,0):
+		maxIdx = vtkArrayMin(radius)
+		closestPoint = centerline.GetPoint(maxIdx)
+	else:
+		# Find the closest point to the picked point
+		iD = kDTree.FindClosestPoint(maxPoint)
+
+		# Get the id of the closest point
+		closestPoint = kDTree.GetDataSet().GetPoint(iD)
+
+	maxSource.SetCenter(closestPoint)
+	maxSource.SetRadius(0.3);
+	maxMapper = vtk.vtkPolyDataMapper()
+	maxMapper.SetInputConnection(minSource.GetOutputPort());
+	maxActor = vtk.vtkActor()
+	maxActor.SetMapper(maxMapper);
+	maxActor.GetProperty().SetColor((1.0,0.0,0.0))
+
+	centerlineActor = vtk.vtkActor()
+	centerlineActor.SetMapper(centerlineMapper)
+	
+	surfaceActor = vtk.vtkActor()
+	surfaceActor.SetMapper(surfaceMapper)       
+	surfaceActor.GetProperty().SetOpacity(0.3)
+
+	# text actor
+	usageTextActor = vtk.vtkTextActor()
+	usageTextActor.GetPositionCoordinate().SetCoordinateSystemToNormalizedViewport()
+	usageTextActor.GetPosition2Coordinate().SetCoordinateSystemToNormalizedViewport()
+	usageTextActor.SetPosition([0.001, 0.05])
+	usageTextActor.SetInput("Tab: Switch max/min point\nSpace: Locate max/min point\nEnter/Close Window: Process")
+
+	currentSelectionTextActor = vtk.vtkTextActor()
+	currentSelectionTextActor.GetPositionCoordinate().SetCoordinateSystemToNormalizedViewport()
+	currentSelectionTextActor.GetPosition2Coordinate().SetCoordinateSystemToNormalizedViewport()
+	currentSelectionTextActor.SetPosition([0.25, 0.1])
+	currentSelectionTextActor.SetInput("Current selection: min point (red)")
+
+	renderer = vtk.vtkRenderer()
+	renderer.AddActor(centerlineActor)
+	renderer.AddActor(surfaceActor)
+	renderer.AddActor(minActor)
+	renderer.AddActor(maxActor)
+	renderer.AddActor2D(scalarBar)
+	renderer.AddActor(usageTextActor)
+	renderer.AddActor(currentSelectionTextActor)
+
+	renderWindow = vtk.vtkRenderWindow()
+	renderWindow.AddRenderer(renderer)
+
+	renderWindowInteractor = vtk.vtkRenderWindowInteractor()
+	renderWindowInteractor.SetRenderWindow(renderWindow)
+	mystyle = MyInteractorStyle(renderWindowInteractor)
+	mystyle.SetMaxSphereSource(maxSource)
+	mystyle.SetMinSphereSource(minSource)
+	mystyle.SetCenterline(centerline)
+	mystyle.SetSelectionTextActor(currentSelectionTextActor)
+	renderWindowInteractor.SetInteractorStyle(mystyle)
+
+	renderWindow.SetSize(1024,780); #(width, height)
+	renderWindow.Render()
+	renderWindowInteractor.Start()
+
+	minPoint = minSource.GetCenter()
+	maxPoint = maxSource.GetCenter()
+
+	# compute degree of stenosis
+	minIdx = kDTree.FindClosestPoint(minPoint)
+	minRadius = centerline.GetPointData().GetArray("Radius").GetTuple(minIdx)[0]
+	maxIdx = kDTree.FindClosestPoint(maxPoint)
+	maxRadius = centerline.GetPointData().GetArray("Radius").GetTuple(maxIdx)[0]
+	DoS = (1-minRadius/maxRadius)*100
+
+	print("{}: min radius = {} mm, Degree of stenosis = {} %".format(timePoint,minRadius,DoS))
+
+	return DoS, minPoint, maxPoint
+
+def result_analysis(case_dir, minPoint=(0,0,0), maxPoint=(0,0,0), probe=False):
 	centerline = os.path.join(case_dir, "centerline_clipped.vtp")
 	surface = os.path.join(case_dir, "surface_capped.stl")
 	output_dir = os.path.join(case_dir,"CFD_OpenFOAM_result")
 
-	# centerlineReader = vtk.vtkXMLPolyDataReader()
-	# centerlineReader.SetFileName(centerline)
-	# centerlineReader.Update()
-	# centerline = centerlineReader.GetOutput()
-	# centerline.GetCellData().SetScalars(centerline.GetCellData().GetArray(2));
-	# centerline.GetPointData().SetScalars(centerline.GetPointData().GetArray("Abscissas"));
-
-	# surfaceReader = vtk.vtkSTLReader()
-	# surfaceReader.SetFileName(surface)
-	# surfaceReader.Update()
-	# surface = surfaceReader.GetOutput()
-
-	# lut = vtk.vtkLookupTable()
-	# # lut.SetNumberOfTableValues(3);
-	# lut.Build()
-
-	# # Fill in a few known colors, the rest will be generated if needed
-	# # lut.SetTableValue(0, 1.0000, 0     , 0, 1);  
-	# # lut.SetTableValue(1, 0.0000, 1.0000, 0.0000, 1);
-	# # lut.SetTableValue(2, 0.0000, 0.0000, 1.0000, 1); 
-
-	# centerlineMapper = vtk.vtkPolyDataMapper()
-	# centerlineMapper.SetInputData(centerline)
-	# centerlineMapper.SetScalarRange(0, centerline.GetPointData().GetScalars().GetMaxNorm());
-	# centerlineMapper.SetLookupTable(lut);
-	# centerlineMapper.SetScalarModeToUsePointData()
-
-	# surfaceMapper = vtk.vtkPolyDataMapper()
-	# surfaceMapper.SetInputData(surface)
-
-	# scalarBar = vtk.vtkScalarBarActor()
-	# scalarBar.SetLookupTable(centerlineMapper.GetLookupTable());
-	# scalarBar.SetTitle("Abscissas");
-	# scalarBar.SetNumberOfLabels(4);
-	# scalarBar.SetWidth(0.08)
-	# scalarBar.SetHeight(0.6)
-	# scalarBar.SetPosition(0.9,0.1)
-
-	# # auto find the smallest radius point
-	# radius = centerline.GetPointData().GetArray("Radius")
-
-	# # build kd tree to locate the nearest point
-	# # Create kd tree
-	# kDTree = vtk.vtkKdTreePointLocator()
-	# kDTree.SetDataSet(centerline)
-	# kDTree.BuildLocator()
-
-	# minSource = vtk.vtkSphereSource()
-	# if minPoint == (0,0,0):
-	# 	minIdx = vtkArrayMin(radius)
-	# 	closestPoint = centerline.GetPoint(minIdx)
-	# else:
-	# 	# Find the closest point to the picked point
-	# 	iD = kDTree.FindClosestPoint(minPoint)
-
-	# 	# Get the id of the closest point
-	# 	closestPoint = kDTree.GetDataSet().GetPoint(iD)
-
-	# minSource.SetCenter(closestPoint)
-	# minSource.SetRadius(0.3);
-	# minMapper = vtk.vtkPolyDataMapper()
-	# minMapper.SetInputConnection(minSource.GetOutputPort());
-	# minActor = vtk.vtkActor()
-	# minActor.SetMapper(minMapper);
-	# minActor.GetProperty().SetColor((1.0,0.0,0.0))
-
-	# maxSource = vtk.vtkSphereSource()
-	# if maxPoint == (0,0,0):
-	# 	maxIdx = vtkArrayMin(radius)
-	# 	closestPoint = centerline.GetPoint(maxIdx)
-	# else:
-	# 	# Find the closest point to the picked point
-	# 	iD = kDTree.FindClosestPoint(maxPoint)
-
-	# 	# Get the id of the closest point
-	# 	closestPoint = kDTree.GetDataSet().GetPoint(iD)
-
-	# maxSource.SetCenter(closestPoint)
-	# maxSource.SetRadius(0.3);
-	# maxMapper = vtk.vtkPolyDataMapper()
-	# maxMapper.SetInputConnection(minSource.GetOutputPort());
-	# maxActor = vtk.vtkActor()
-	# maxActor.SetMapper(maxMapper);
-	# maxActor.GetProperty().SetColor((1.0,0.0,0.0))
-
-	# centerlineActor = vtk.vtkActor()
-	# centerlineActor.SetMapper(centerlineMapper)
-	
-	# surfaceActor = vtk.vtkActor()
-	# surfaceActor.SetMapper(surfaceMapper)       
-	# surfaceActor.GetProperty().SetOpacity(0.3)
-
-	# # text actor
-	# usageTextActor = vtk.vtkTextActor()
-	# usageTextActor.GetPositionCoordinate().SetCoordinateSystemToNormalizedViewport()
-	# usageTextActor.GetPosition2Coordinate().SetCoordinateSystemToNormalizedViewport()
-	# usageTextActor.SetPosition([0.001, 0.05])
-	# usageTextActor.SetInput("Tab: Switch max/min point\nSpace: Locate max/min point\nEnter/Close Window: Process")
-
-	# currentSelectionTextActor = vtk.vtkTextActor()
-	# currentSelectionTextActor.GetPositionCoordinate().SetCoordinateSystemToNormalizedViewport()
-	# currentSelectionTextActor.GetPosition2Coordinate().SetCoordinateSystemToNormalizedViewport()
-	# currentSelectionTextActor.SetPosition([0.25, 0.1])
-	# currentSelectionTextActor.SetInput("Current selection: min point (red)")
-
-	# renderer = vtk.vtkRenderer()
-	# renderer.AddActor(centerlineActor)
-	# renderer.AddActor(surfaceActor)
-	# renderer.AddActor(minActor)
-	# renderer.AddActor(maxActor)
-	# renderer.AddActor2D(scalarBar)
-	# renderer.AddActor(usageTextActor)
-	# renderer.AddActor(currentSelectionTextActor)
-
-	# renderWindow = vtk.vtkRenderWindow()
-	# renderWindow.AddRenderer(renderer)
-
-	# renderWindowInteractor = vtk.vtkRenderWindowInteractor()
-	# renderWindowInteractor.SetRenderWindow(renderWindow)
-	# mystyle = MyInteractorStyle(renderWindowInteractor)
-	# mystyle.SetMaxSphereSource(maxSource)
-	# mystyle.SetMinSphereSource(minSource)
-	# mystyle.SetCenterline(centerline)
-	# mystyle.SetSelectionTextActor(currentSelectionTextActor)
-	# renderWindowInteractor.SetInteractorStyle(mystyle)
-
-	# renderWindow.SetSize(1024,780); #(width, height)
-	# renderWindow.Render()
-	# renderWindowInteractor.Start()
-
-	# minPoint = minSource.GetCenter()
-	# maxPoint = maxSource.GetCenter()
-
-	# # compute degree of stenosis
-	# minIdx = kDTree.FindClosestPoint(minPoint)
-	# minRadius = centerline.GetPointData().GetArray("Radius").GetTuple(minIdx)[0]
-	# maxIdx = kDTree.FindClosestPoint(maxPoint)
-	# maxRadius = centerline.GetPointData().GetArray("Radius").GetTuple(maxIdx)[0]
-	# DoS = (1-minRadius/maxRadius)*100
-
-	# print("{}: min radius = {} mm, Degree of stenosis = {} %".format(timePoint,minRadius,DoS))
+	if probe:
+		Dos, minPoint, maxPoint = probe_min_max_point(centerline,surface,minPoint,maxPoint)
 
 	# load inlet json file
 	with open(os.path.join(case_dir,"inlets.json")) as f:
@@ -480,7 +486,7 @@ def result_analysis(case_dir, minPoint=(0,0,0), maxPoint=(0,0,0)):
 	# load last 5 time points and take average
 	results_vtk = []
 
-	for time in range(0,201,10):
+	for time in range(0,2001,100):
 		results_vtk.append(os.path.join(case_dir,"CFD_OpenFOAM", "VTK","OpenFoam_" + str(time)+".vtk"))
 	
 	return_value = centerline_probe_result(
@@ -491,10 +497,11 @@ def result_analysis(case_dir, minPoint=(0,0,0), maxPoint=(0,0,0)):
 		bifurcationPoint=inlets["BifurcationPoint"]["coordinate"]
 		)
 
-	return return_value
+	return return_value, minPoint, maxPoint
 	
 def main():
 	group = "medical"
+	probe = True
 
 	output_file = "D:/Projects/intracranial/data/followup/result.csv".format(group)
 	data_folder = "D:/Projects/intracranial/data/followup/{}".format(group)
@@ -512,12 +519,14 @@ def main():
 	timePoints = ["baseline"]
 	# for case in os.listdir(data_folder):
 	for case in ["ChowLM"]:
+		minPoint = (0,0,0)
+		maxPoint = (0,0,0)
 		for timePoint in timePoints:
 			if not os.path.exists(os.path.join(data_folder,case,timePoint)):
 				continue
 			
 			row = {"patient": case, "group": group, "time point": timePoint}
-			result = result_analysis(os.path.join(data_folder,case,timePoint))
+			result, minPoint, maxPoint = result_analysis(os.path.join(data_folder,case,timePoint),minPoint=minPoint,maxPoint=maxPoint,probe=probe)
 			row.update(result)
 			
 			result_df = result_df.append(pd.Series(row),ignore_index=True)
