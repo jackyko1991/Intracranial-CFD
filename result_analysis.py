@@ -9,6 +9,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import math
 import json
+from tqdm import tqdm
 
 def readCSV(path):
 	f = open(path, 'rb')
@@ -53,7 +54,6 @@ class MyInteractorStyle(vtk.vtkInteractorStyleTrackballCamera):
 	def __init__(self,parent=None):
 		# intractorStyleTrackballCamera does not inherit from render window interactor, nned to port manually
 		# self.parent = self.GetInteractor()
-		# print self.parent
 		self.parent = vtk.vtkRenderWindowInteractor()
 		if(parent is not None):
 			self.parent = parent
@@ -133,6 +133,9 @@ def plot_centerline_result(centerline, array_names, result_path,minPoint=(0,0,0)
 	thresholdFilter.SetInputData(centerline)
 	thresholdFilter.SetInputArrayToProcess(0, 0, 0, vtk.vtkDataObject.FIELD_ASSOCIATION_CELLS, "CenterlineIds_average")
 	thresholdFilter.Update()
+
+	if thresholdFilter.GetOutput().GetNumberOfPoints() == 0:
+		return
 
 	x = vtk_to_numpy(thresholdFilter.GetOutput().GetPointData().GetArray("Abscissas_average"))
 	x = [(value - x[0]) for value in x]
@@ -296,13 +299,26 @@ def centerline_probe_result(centerline_file,vtk_file_list, output_dir,minPoint=(
 		minPoint = minPoint,
 		bifurcationPoint = bifurcationPoint)
 
-
 	# extract ica
 	thresholdFilter = vtk.vtkThreshold()
 	thresholdFilter.ThresholdBetween(1,1)
 	thresholdFilter.SetInputData(averageFilter.GetOutput())
 	thresholdFilter.SetInputArrayToProcess(0, 0, 0, vtk.vtkDataObject.FIELD_ASSOCIATION_CELLS, "CenterlineIds_average")
 	thresholdFilter.Update()
+
+	if thresholdFilter.GetOutput().GetNumberOfPoints() == 0:
+		tqdm.write("Centerline file {} does not contain suitable number of CenterlineIds".format(centerline_file))
+		return {
+			'radius mean(mm)': "NA",
+			'radius min(mm)': "NA",
+			'pressure mean(mmHg)': "NA",
+			'max pressure gradient(mmHg)': "NA",
+			'in/out pressure gradient(mmHg)': "NA",
+			'velocity mean(ms^-1)': "NA",
+			'peak velocity(ms^-1)': "NA",
+			'vorticity mean(s^-1)': "NA",
+			'peak vorticity(s^-1)': "NA"
+			}
 
 	# compute result values
 	radius = vtk_to_numpy(thresholdFilter.GetOutput().GetPointData().GetArray("Radius_average"))
@@ -317,7 +333,7 @@ def centerline_probe_result(centerline_file,vtk_file_list, output_dir,minPoint=(
 		'radius min(mm)': np.min(radius),
 		'pressure mean(mmHg)': np.mean(pressure),
 		'max pressure gradient(mmHg)': np.mean(heapq.nlargest(5, pressure)) - np.mean(heapq.nsmallest(5,pressure)),
-		'in/out pressure gradient(mmHg)': np.mean(pressure[0:5])/np.mean(pressure[-5:-1]),
+		'in/out pressure gradient(mmHg)': np.mean(pressure[0:5]) - np.mean(pressure[-5:]),
 		'velocity mean(ms^-1)': np.mean(velocity),
 		'peak velocity(ms^-1)': np.mean(heapq.nlargest(5, velocity)),
 		'vorticity mean(s^-1)': np.mean(vorticity),
@@ -487,7 +503,7 @@ def result_analysis(case_dir, minPoint=(0,0,0), maxPoint=(0,0,0), probe=False):
 	results_vtk = []
 
 	for time in range(0,2001,100):
-		results_vtk.append(os.path.join(case_dir,"CFD_OpenFOAM", "VTK","OpenFoam_" + str(time)+".vtk"))
+		results_vtk.append(os.path.join(case_dir,"CFD_OpenFOAM", "VTK","OpenFOAM_" + str(time)+".vtk"))
 	
 	return_value = centerline_probe_result(
 		os.path.join(case_dir,"centerline_clipped.vtp"),
@@ -500,11 +516,11 @@ def result_analysis(case_dir, minPoint=(0,0,0), maxPoint=(0,0,0), probe=False):
 	return return_value, minPoint, maxPoint
 	
 def main():
-	group = "medical"
-	probe = True
+	group = "stent"
+	probe = False
 
-	output_file = "D:/Projects/intracranial/data/followup/result.csv".format(group)
-	data_folder = "D:/Projects/intracranial/data/followup/{}".format(group)
+	output_file = "/mnt/DIIR-JK-NAS/data/intracranial/followup/result-{}.csv".format(group,group)
+	data_folder = "/mnt/DIIR-JK-NAS/data/intracranial/followup/{}".format(group)
 
 	# create result dataframe
 	field_names = ['patient','group','time point',
@@ -515,24 +531,28 @@ def main():
 		'vorticity mean(s^-1)','peak vorticity(s^-1)']
 
 	result_df = pd.DataFrame(columns = field_names)
-	# timePoints = ['baseline','baseline-post','12months','followup']
-	timePoints = ["baseline"]
-	# for case in os.listdir(data_folder):
-	for case in ["ChowLM"]:
+	timePoints = ['baseline','baseline-post','12months','followup']
+	# timePoints = ["baseline"]
+
+	pbar = tqdm(os.listdir(data_folder))
+	# pbar = tqdm(["ChowLM"])
+	for case in pbar:
+		pbar.set_description(case)
 		minPoint = (0,0,0)
 		maxPoint = (0,0,0)
-		for timePoint in timePoints:
+
+		pbar2 = tqdm(timePoints)
+		for timePoint in pbar2:
 			if not os.path.exists(os.path.join(data_folder,case,timePoint)):
 				continue
-			
+			pbar2.set_description(timePoint)
+
 			row = {"patient": case, "group": group, "time point": timePoint}
 			result, minPoint, maxPoint = result_analysis(os.path.join(data_folder,case,timePoint),minPoint=minPoint,maxPoint=maxPoint,probe=probe)
 			row.update(result)
-			
+			# tqdm.write(str(row))
 			result_df = result_df.append(pd.Series(row),ignore_index=True)
-			result_df.to_csv(output_file,index=False)
-
-			exit()
+	result_df.to_csv(output_file,index=False)
 
 if __name__=="__main__":
 	main()
