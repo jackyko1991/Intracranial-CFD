@@ -386,12 +386,12 @@ def run_case(case_dir, output_vtk=False, parallel=True, cores=4):
 		tqdm.write("{}: Execute pisoFoam...".format(datetime.datetime.now()))
 		os.system("icoFoam > ./log/pisoFoam.log")
 
-	# # post processing
-	# tqdm.write("{}: Computing vorticity...".format(datetime.datetime.now()))
-	# os.system("pisoFoam -postProcess -func vorticity > ./log/vorticity.log")
+	# post processing
+	tqdm.write("{}: Computing vorticity...".format(datetime.datetime.now()))
+	os.system("pisoFoam -postProcess -func vorticity > ./log/vorticity.log")
 
-	# tqdm.write("{}: Computing wall shear stress...".format(datetime.datetime.now()))
-	# os.system("pisoFoam -postProcess -func wallShearStress > ./log/wallShearStress.log")
+	tqdm.write("{}: Computing wall shear stress...".format(datetime.datetime.now()))
+	os.system("pisoFoam -postProcess -func wallShearStress > ./log/wallShearStress.log")
 
 	# create OpenFOAM read fill for paraview
 	os.system("touch OpenFOAM.OpenFOAM")
@@ -458,7 +458,8 @@ def main():
 		"ChanShunPak",
 		"CheungSikNin",
 		"ChickFungKuen",
-		"ChowLaiMing"]
+		"ChowLaiMing"
+		]
 	
 	pbar = tqdm(datalist)
 
@@ -469,7 +470,6 @@ def main():
 				if not os.path.exists(os.path.join(data_dir,sub_data_dir,case,phase)):
 					continue
 				run_case(os.path.join(data_dir,sub_data_dir,case,phase),output_vtk=True, parallel=True, cores=8)
-			exit()
 
 if __name__ == "__main__":
 	main()
