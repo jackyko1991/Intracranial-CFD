@@ -58,7 +58,7 @@ Test results are as following:
 ## Output
 ### Units
 Density of blood = 1060kgm^-3
-Pressure in mmHg = rho normalized pressure p* * density * 0.00750062mmHg/Pa = p* 0.795066 mmHg
+Pressure in mmHg = rho normalized pressure p* * density * 0.00750062mmHg/Pa = p* 7.95066 mmHg
 
 - VTK file: 
 	- velocity: ms-1 (after 1000x scaling)
