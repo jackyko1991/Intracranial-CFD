@@ -43,6 +43,8 @@ Loading temporal data into Paraview is easy, first select all necessary timestep
 ### Particle Tracing
 After creating streamline in Paraview, it is possible to trace the movement of particles.
 
+![alt text](./imgs/gnuid.gif "Animation Output")
+
 1. Create time contour
 	1. Contour -> Properties
 	2. Contour by `IntegrationTime`
@@ -62,18 +64,16 @@ After creating streamline in Paraview, it is possible to trace the movement of p
 	4. Click `+` at left most column
 	![alt text](./imgs/AnimationView.png "AnimationView")
 	4. Double click at the interpolation icon to change Animation Keyframes
-	4. Time = \[starttime\], Value = \[starttime\], Time = \[endtime\], Value = \[endtime\] -> OK
+	4. Time = `starttime`, Value = `starttime`, Time = `endtime`, Value = `endtime` -> OK
 	![alt text](./imgs/KeyFrame.png "KeyFrame")
 	4. Click `Play`
 	4. To make the animation more smooth/ slow motion, increase the No. of Frames 
 	![alt text](./imgs/NumberOfFrames.png "NumberOfFrames")
 4. Export animation
 	1. File -> Save Nomination -> Choose the desire output location
-	2. Frame Rate = <No. of Frames>/((\[starttime\] - \[endtime\])/ \[playspeed\]) 
+	2. Frame Rate = `No. of Frames`/((`starttime` - `endtime`)/ `playspeed`) 
 	For example, to play a 3 second (0-3 second) video (number of frames = 300) in 0.25x speed, you will need a output FPS at 300/((3-0)/0.25) = 25FPS. The result video will have length of 12 seconds.
 	![alt text](./imgs/SaveAnimation.png "SaveAnimation")
-	Exported result:
-	![alt text](./imgs/gnuid.gif "Animation Output")
 
 ## VTK + VMTK
 The underlying visualization function of Paraview is supported by open source toolkit [VTK](https://vtk.org/). Users may write their own scripts in C++/Python to speed up the animation process. For toolchain convenience I will introduce the working principle with the aid of C++ codes. 
