@@ -43,20 +43,37 @@ Loading temporal data into Paraview is easy, first select all necessary timestep
 ### Particle Tracing
 After creating streamline in Paraview, it is possible to trace the movement of particles.
 
-1. Contour -> Properties -> Contour by `IntegrationTime`
-2. Glyph
-	- Glyph Source -> Glyph Type set to `Sphere`
-	- Scale -> Scale Array -> `No scale array`
-3. View -> Animated View
-	- Column 1 -> Select `Contour 1`
-	- Column 2 -> Select `Isosurfaces`
-	- Click `+` at left most column
-	- Double click at the interpolation icon to change Animation Keyframes
-	- Time = <starttime>, Value = <starttime>, Time = <endtime>, Value = <endtime> -> OK
-	- Click `Play`
-	- To make the animation more smooth/ slow motion, increase the No. of Frames 
-4. File -> Save Nomination -> Choose the desire output location -> Frame Rate = <No. of Frames>/((<starttime> - <endtime>)/ <playspeed>) 
+1. Create time contour
+	1. Contour -> Properties
+	2. Contour by `IntegrationTime`
+	2. Value Range is `0`
+	3. Click `Apply`
+	![alt text](./imgs/Contour.png "Contour")
+2. (Optional) Enlarge the source points
+	1. Glyph 
+	2. Glyph Source -> Glyph Type set to `Sphere`
+	2. Orientation -> Orientation Array -> `No orientation array`
+	2. Scale -> Scale Array -> `No scale array`
+	![alt text](./imgs/Glyph.png "Glyph")
+3. Animation 
+	1. View -> Animated View
+	2. Column 1 -> Select `Contour 1`
+	3. Column 2 -> Select `Isosurfaces`
+	4. Click `+` at left most column
+	![alt text](./imgs/AnimationView.png "AnimationView")
+	4. Double click at the interpolation icon to change Animation Keyframes
+	4. Time = \[starttime\], Value = \[starttime\], Time = \[endtime\], Value = \[endtime\] -> OK
+	![alt text](./imgs/KeyFrame.png "KeyFrame")
+	4. Click `Play`
+	4. To make the animation more smooth/ slow motion, increase the No. of Frames 
+	![alt text](./imgs/NumberOfFrames.png "NumberOfFrames")
+4. Export animation
+	1. File -> Save Nomination -> Choose the desire output location
+	2. Frame Rate = <No. of Frames>/((\[starttime\] - \[endtime\])/ \[playspeed\]) 
 	For example, to play a 3 second (0-3 second) video (number of frames = 300) in 0.25x speed, you will need a output FPS at 300/((3-0)/0.25) = 25FPS. The result video will have length of 12 seconds.
+	![alt text](./imgs/SaveAnimation.png "SaveAnimation")
+	Exported result:
+	![alt text](./imgs/gnuid.gif "Animation Output")
 
 ## VTK + VMTK
 The underlying visualization function of Paraview is supported by open source toolkit [VTK](https://vtk.org/). Users may write their own scripts in C++/Python to speed up the animation process. For toolchain convenience I will introduce the working principle with the aid of C++ codes. 
