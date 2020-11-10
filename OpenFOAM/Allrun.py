@@ -111,6 +111,8 @@ def edit_velocity(dictionary, domain_json, velocity=1):
 						"inletValue": "uniform (0 0 0)",
 						"value":"uniform (0 0 0)"}}
 						)
+				else:
+					continue
 			except:
 				continue
 
@@ -153,6 +155,8 @@ def edit_pressure(dictionary, domian_json, pressure=0):
 						"type": "fixedValue",
 						"value":"uniform 0 "}}
 						)
+				else:
+					continue
 			except:
 				continue
 
@@ -183,7 +187,9 @@ def edit_snappyHexMeshDict(dictionary, domain_json):
 		regions = {"vessel":{"name": "vessel"}}
 		for key, value in domain_dict.items():
 			try: 
-				if value["type"]:
+				if value["type"] == "Stenosis":
+					continue
+				else:
 					regions.update({key
 						: {"name": key}})
 			except:
@@ -198,6 +204,8 @@ def edit_snappyHexMeshDict(dictionary, domain_json):
 			try:
 				if value["type"] == "inlet" or value["type"] == "outlet":
 					regions.update({key: {"level": "(4 4)", "patchInfo":{"type":"patch"}}})
+				else:
+					continue
 			except:
 				continue
 
@@ -246,7 +254,9 @@ def stl_concat(domain_json):
 
 	for key, value in domain_dict.items():
 		try:
-			if value["type"]:
+			if value["type"] == "Stenosis":
+				continue
+			else:
 				# check nan and correct
 				mesh = trimesh.load_mesh(os.path.join(working_dir,value["filename"]))
 				mesh.process()
@@ -441,35 +451,47 @@ def run_case(case_dir, output_vtk=False, parallel=True, cores=4):
 	tqdm.write("{}: CFD operation on {} complete".format(datetime.datetime.now(),case_dir))
 
 def main():
-	data_dir = "/mnt/DIIR-JK-NAS/data/intracranial"
+	data_dir = "/mnt/DIIR-JK-NAS/data/intracranial/data_30_30/stenosis"
+	# sub_data_dirs = [
+	# 	"data_ESASIS_followup/medical",
+	# 	"data_ESASIS_followup/stent",
+	# 	"data_ESASIS_no_stenting",
+	# 	"data_surgery",
+	# 	"data_wingspan"]
+
 	sub_data_dirs = [
-		"data_ESASIS_followup/medical",
-		"data_ESASIS_followup/stent",
-		"data_ESASIS_no_stenting",
-		"data_surgery",
-		"data_wingspan"]
+		"ESASIS_medical",
+		"ESASIS_stent"
+		]
 
 	# phases = ["baseline", "baseline-post", "12months", "followup"]
-	phases = ["baseline"]
-
-	# datalist = os.listdir(data_dir)
-	datalist = [
-		"ChanPitChuen",
-		"ChanShunPak",
-		"CheungSikNin",
-		"ChickFungKuen",
-		"ChowLaiMing"
-		]
-	
-	pbar = tqdm(datalist)
+	# phases = ["baseline"]
 
 	for sub_data_dir in sub_data_dirs:
+		datalist = os.listdir(os.path.join(data_dir,sub_data_dir))
+		# datalist = [
+		# 	"ChanPitChuen",
+		# 	"ChanShunPak",
+		# 	"CheungSikNin",
+		# 	"ChickFungKuen",
+		# 	"ChowLaiMing"
+		# 	]
+		
+		pbar = tqdm(datalist)
+
 		for case in pbar:
 			pbar.set_description(case)
-			for phase in phases:
-				if not os.path.exists(os.path.join(data_dir,sub_data_dir,case,phase)):
-					continue
-				run_case(os.path.join(data_dir,sub_data_dir,case,phase),output_vtk=True, parallel=True, cores=8)
+			# for phase in phases:
+				# if not os.path.exists(os.path.join(data_dir,sub_data_dir,case,phase)):
+				# 	continue
+				
+				# if os.path.exists(os.path.join(data_dir,sub_data_dir,case,"CFD_OpenFOAM")):
+				# 	continue
+
+				# run_case(os.path.join(data_dir,sub_data_dir,case,phase),output_vtk=True, parallel=True, cores=8)
+
+			run_case(os.path.join(data_dir,sub_data_dir,case),output_vtk=True, parallel=True, cores=8)
+			# exit()
 
 if __name__ == "__main__":
 	main()
