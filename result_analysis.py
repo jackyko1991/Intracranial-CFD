@@ -130,7 +130,7 @@ class MyInteractorStyle(vtk.vtkInteractorStyleTrackballCamera):
 
 		return
 
-def plot_centerline_result(centerline, array_names, result_path,minPoint=(0,0,0),bifurcationPoint=(0,0,0)):
+def plot_centerline_result(centerline, array_names, result_path, dev_result_path ,minPoint=(0,0,0),bifurcationPoint=(0,0,0)):
 	# extract ica
 	thresholdFilter = vtk.vtkThreshold()
 	thresholdFilter.ThresholdBetween(1,1)
@@ -166,6 +166,10 @@ def plot_centerline_result(centerline, array_names, result_path,minPoint=(0,0,0)
 	fig.suptitle("CFD result")
 	fig.set_size_inches(10,8)
 
+	fig2, axs2 = plt.subplots(len(array_names),1)
+	fig2.suptitle("CFD result derivatives")
+	fig2.set_size_inches(10,8)
+
 	for i in range(len(array_names)):
 		for lineId in range(int(centerline.GetCellData().GetArray("CenterlineIds_average").GetMaxNorm())):
 			thresholdFilter.ThresholdBetween(lineId,lineId)
@@ -182,14 +186,27 @@ def plot_centerline_result(centerline, array_names, result_path,minPoint=(0,0,0)
 					
 			if len(array_names) == 1:
 				ax = axs
+				ax2 = axs2
 			else:
 				ax = axs[i]
+				ax2 = axs2[i]
 
 			order = np.argsort(x)
 			xs = np.array(x)[order]
 			ys = np.array(y)[order]
 
+			unique, index = np.unique(xs, axis=-1, return_index=True)
+			xs = xs[index]
+			ys = ys[index]
+
+			f = interp1d(xs,ys,kind="cubic")
+			xs = np.linspace(0, np.amax(x), num=200, endpoint=True)
+			ys = f(xs)
+
+			dys = np.gradient(ys, xs)
+
 			ax.plot(xs,ys)
+			ax2.plot(xs,dys)
 
 		if array_names[i] == "Radius_average":
 			ylabel = "Radius (mm)"
@@ -218,21 +235,32 @@ def plot_centerline_result(centerline, array_names, result_path,minPoint=(0,0,0)
 
 		if bifurcationPoint !=(0,0,0):
 			ax.axvline(x=bifPointAbscissas,ymin=ymin,ymax=ymax,linestyle ="--",color='m')
+			ax2.axvline(x=bifPointAbscissas,ymin=ymin,ymax=ymax,linestyle ="--",color='m')
 
 		if minPoint !=(0,0,0):
 			ax.axvline(x=minPointAbscissas,ymin=ymin,ymax=ymax,linestyle ="--",color='c')
+			ax2.axvline(x=minPointAbscissas,ymin=ymin,ymax=ymax,linestyle ="--",color='c')
 
 		ax.set_ylabel(ylabel)
+		ax2.set_ylabel(ylabel)
 		if i == (len(array_names)-1):
 			ax.set_xlabel("Abscissas (mm)")
+			ax2.set_xlabel("Abscissas (mm)")
 		else:
 			ax.set_xticklabels([])
+			ax2.set_xticklabels([])
 		ax.set_xlim(x[0],x[-1])
 		ax.set_ylim(ymin,ymax)
+		ax2.set_xlim(x[0],x[-1])
+		ax2.set_ylim(ymin,ymax)
 		
 	# save the plot 
-	plt.savefig(result_path,dpi=100)
-	plt.clf()
+	fig.savefig(result_path,dpi=100)
+	fig.clf()
+
+	fig2.savefig(dev_result_path,dpi=100)
+	fig2.clf()
+
 	plt.close("all")
 
 def centerline_probe_result(centerline_file,vtk_file_list, output_dir,minPoint=(0,0,0), bifurcationPoint=(0,0,0)):
@@ -325,10 +353,12 @@ def centerline_probe_result(centerline_file,vtk_file_list, output_dir,minPoint=(
 
 	# plot result
 	plot_result_path = os.path.join(os.path.dirname(centerline_file),output_dir,"result.png")
+	dev_plot_result_path = os.path.join(os.path.dirname(centerline_file),output_dir,"result_dev.png")
 	plot_centerline_result(
 		averageFilter.GetOutput(),
 		["Radius_average","U_average","p(mmHg)_average","vorticity_average","Curvature_average","Torsion_average"], 
 		plot_result_path,
+		dev_plot_result_path,
 		minPoint = minPoint,
 		bifurcationPoint = bifurcationPoint)
 
@@ -386,13 +416,15 @@ def centerline_probe_result(centerline_file,vtk_file_list, output_dir,minPoint=(
 		]
 	mv_windows = np.arange(3,10,2)
 	plot_result_path = os.path.join(os.path.dirname(centerline_file),output_dir,"moving_variance.png")
+	dev_plot_result_path = os.path.join(os.path.dirname(centerline_file),output_dir,"moving_variance_dev.png")
 
-	mv_matrix_df = moving_variance_matrix(averageFilter.GetOutput(),mv_fields,mv_windows,
+	mv_matrix_df, mv_dy_matrix_df = moving_variance_matrix(averageFilter.GetOutput(),mv_fields,mv_windows,
 		minPoint = minPoint,
 		bifurcationPoint = bifurcationPoint,
-		result_path = plot_result_path)
+		result_path = plot_result_path,
+		dev_result_path=dev_plot_result_path)
 
-	return return_value, mv_matrix_df
+	return return_value, mv_matrix_df, mv_dy_matrix_df
 
 def rolling_window(a, window):
 	pad = np.zeros(len(a.shape), dtype=np.int32)
@@ -404,7 +436,7 @@ def rolling_window(a, window):
 
 	return np.lib.stride_tricks.as_strided(a, shape=shape, strides=strides)
 
-def moving_variance_matrix(centerline,fields, windows, minPoint=(0,0,0), bifurcationPoint=(0,0,0), result_path=""):
+def moving_variance_matrix(centerline,fields, windows, minPoint=(0,0,0), bifurcationPoint=(0,0,0), result_path="", dev_result_path=""):
 	# create input array from centerline
 	thresholdFilter = vtk.vtkThreshold()
 	thresholdFilter.SetInputData(centerline)
@@ -414,6 +446,10 @@ def moving_variance_matrix(centerline,fields, windows, minPoint=(0,0,0), bifurca
 	fig, axs = plt.subplots(len(fields),1)
 	fig.suptitle("CFD Moving Variance")
 	fig.set_size_inches(10,8)
+
+	fig2, axs2 = plt.subplots(len(fields),1)
+	fig2.suptitle("CFD Derivative Moving Variance")
+	fig2.set_size_inches(10,8)
 
 	# build kd tree to locate the nearest point
 	# Create kd tree
@@ -437,10 +473,13 @@ def moving_variance_matrix(centerline,fields, windows, minPoint=(0,0,0), bifurca
 
 	col_name = ["branch","window"] + fields
 	pmv_df = pd.DataFrame(columns=col_name)
+	col_name_dy = ["branch","window"] + [y+"_dev" for y in fields]
+	pmv_dy_df = pd.DataFrame(columns=col_name_dy)
 
 	for lineId in range(int(centerline.GetCellData().GetArray("CenterlineIds_average").GetMaxNorm())):
 		a_x = []
 		a_y = []
+		a_dy = []
 
 		thresholdFilter.ThresholdBetween(lineId,lineId)
 		thresholdFilter.Update()
@@ -471,27 +510,39 @@ def moving_variance_matrix(centerline,fields, windows, minPoint=(0,0,0), bifurca
 			xnew = np.linspace(0, np.amax(x), num=50, endpoint=True)
 			ynew = f(xnew)
 
+			dy = np.gradient(ynew, xnew)
+
 			a_x.append(xnew)
 			a_y.append(ynew)
+			a_dy.append(dy)
 
 		a_x = np.array(a_x)
 		a_y = np.array(a_y)
+		a_dy = np.array(a_dy)
 
 		for window in windows:
 			mv = np.var(rolling_window(a_y, window) , axis=-1)
+			mv_dy = np.var(rolling_window(a_dy, window) , axis=-1)
 
 			pmv = np.amax(mv,axis=-1)
 			pmv = np.concatenate(([lineId,window],pmv))
 			pmv_df.loc[len(pmv_df)] = pmv
 
+			pmv_dy = np.amax(mv_dy,axis=-1)
+			pmv_dy = np.concatenate(([lineId,window],pmv_dy))
+			pmv_dy_df.loc[len(pmv_dy_df)] = pmv_dy
+
 			for i in range(len(fields)):
 				# plot moving variance
 				if len(fields) == 1:
 					ax = axs
+					ax2 = axs2
 				else:
 					ax = axs[i]
+					ax2 = axs2[i]
 
 				ax.plot(a_x[i,:],mv[i,:])
+				ax2.plot(a_x[i,:],mv_dy[i,:])
 
 				if fields[i] == "Radius_average":
 					ylabel = "Radius (mm)"
@@ -520,27 +571,41 @@ def moving_variance_matrix(centerline,fields, windows, minPoint=(0,0,0), bifurca
 
 				if bifurcationPoint !=(0,0,0):
 					ax.axvline(x=bifPointAbscissas,ymin=0,ymax=1,linestyle="--",color='m')
+					ax2.axvline(x=bifPointAbscissas,ymin=0,ymax=1,linestyle="--",color='m')
 
 				if minPoint !=(0,0,0):
 					ax.axvline(x=minPointAbscissas,ymin=0,ymax=1,linestyle="--",color='c')
+					ax2.axvline(x=minPointAbscissas,ymin=0,ymax=1,linestyle="--",color='c')
 
 				ax.set_ylabel(ylabel)
+				ax2.set_ylabel(ylabel)
 				if i == (len(fields)-1):
 					ax.set_xlabel("Abscissas (mm)")
+					ax2.set_xlabel("Abscissas (mm)")
 				else:
 					ax.set_xticklabels([])
+					ax2.set_xticklabels([])
 				ax.set_xlim(x[0],x[-1])
 				ax.set_ylim(ymin,ymax)
+				ax2.set_xlim(x[0],x[-1])
+				ax2.set_ylim(ymin,ymax)
 
 	# save the plot 
-	plt.savefig(result_path,dpi=100)
-	plt.clf()
+	fig.savefig(result_path,dpi=100)
+	fig.clf()
+
+	fig2.savefig(dev_result_path,dpi=100)
+	fig2.clf()
+
 	plt.close("all")
 
 	pmv_df = pmv_df.groupby(['window']).max()
 	pmv_df = pmv_df.drop(columns=['branch'])
 
-	return pmv_df
+	pmv_dy_df = pmv_dy_df.groupby(['window']).max()
+	pmv_dy_df = pmv_dy_df.drop(columns=['branch'])
+
+	return pmv_df, pmv_dy_df
 
 def probe_min_max_point(centerline_filename, surface_filename, minPoint=(0,0,0), maxPoint=(0,0,0)):
 	centerlineReader = vtk.vtkXMLPolyDataReader()
@@ -710,7 +775,7 @@ def result_analysis(case_dir, minPoint=(0,0,0), maxPoint=(0,0,0), probe=False):
 	except:
 		minPoint = (0,0,0)
 
-	return_value, mv_matrix_df = centerline_probe_result(
+	return_value, mv_matrix_df, mv_dy_matrix_df = centerline_probe_result(
 		os.path.join(case_dir,domain["centerline"]["filename"]),
 		results_vtk[-5:],
 		output_dir, 
@@ -718,7 +783,7 @@ def result_analysis(case_dir, minPoint=(0,0,0), maxPoint=(0,0,0), probe=False):
 		bifurcationPoint=domain["bifurcation_point"]["coordinate"]
 		)
 
-	return return_value, mv_matrix_df, minPoint, maxPoint
+	return return_value, mv_matrix_df, mv_dy_matrix_df, minPoint, maxPoint
 	
 def main():
 	group = "stent"
@@ -753,7 +818,7 @@ def main():
 			pbar2.set_description(timePoint)
 
 			row = {"patient": case, "group": group, "time point": timePoint}
-			result, minPoint, maxPoint = result_analysis(os.path.join(data_folder,case,timePoint),minPoint=minPoint,maxPoint=maxPoint,probe=probe)
+			result, result_dy, minPoint, maxPoint = result_analysis(os.path.join(data_folder,case,timePoint),minPoint=minPoint,maxPoint=maxPoint,probe=probe)
 			row.update(result)
 			result_df = result_df.append(pd.Series(row),ignore_index=True)
 	result_df.to_csv(output_file,index=False)
@@ -765,11 +830,14 @@ def main2():
 	# output_file = "/mnt/DIIR-JK-NAS/data/intracranial/data_30_30/result_EASIS_medical.csv"
 	# data_folder = "/mnt/DIIR-JK-NAS/data/intracranial/data_30_30/stenosis/ESASIS_medical"
 
-	# output_file = "Z:/data/intracranial/data_30_30/result_EASIS_stent.csv"
-	# data_folder = "Z:/data/intracranial/data_30_30/stenosis/ESASIS_stent"
+	output_file = "Z:/data/intracranial/data_30_30/result_EASIS_medical.csv"
+	data_folder = "Z:/data/intracranial/data_30_30/stenosis/ESASIS_medical"
 
-	output_file = "Z:/data/intracranial/data_30_30/result_surgery.csv"
-	data_folder = "Z:/data/intracranial/data_30_30/surgery"
+	output_file = "Z:/data/intracranial/data_30_30/result_EASIS_stent.csv"
+	data_folder = "Z:/data/intracranial/data_30_30/stenosis/ESASIS_stent"
+
+	# output_file = "Z:/data/intracranial/data_30_30/result_surgery.csv"
+	# data_folder = "Z:/data/intracranial/data_30_30/surgery"
 
 	# create result dataframe
 	field_names = ['patient','group','time point',
@@ -781,8 +849,8 @@ def main2():
 
 	result_df = pd.DataFrame(columns=field_names)
 
-	# pbar = tqdm(os.listdir(data_folder)[19:])
-	pbar = tqdm(["ChanManShan"])
+	pbar = tqdm(os.listdir(data_folder)[0:])
+	# pbar = tqdm(["ChanVaHong"])
 	for case in pbar:
 		pbar.set_description(case)
 		minPoint = (0,0,0)
@@ -792,12 +860,13 @@ def main2():
 			continue
 
 		row = {"patient": case, "group": group, "time point": "baseline"}
-		result, mv_matrix_df, minPoint, maxPoint = result_analysis(os.path.join(data_folder,case),minPoint=minPoint,maxPoint=maxPoint,probe=probe)
+		result, mv_matrix_df, mv_dy_matrix_df, minPoint, maxPoint = result_analysis(os.path.join(data_folder,case),minPoint=minPoint,maxPoint=maxPoint,probe=probe)
 		row.update(result)
 		result_df = result_df.append(pd.Series(row),ignore_index=True)
 
 		# save the moving variance matrix
 		mv_matrix_df.to_csv(os.path.join(data_folder,case,"mv_matrix.csv"),index=True)
+		mv_dy_matrix_df.to_csv(os.path.join(data_folder,case,"mv_df_matrix.csv"),index=True)
 
 	result_df.to_csv(output_file,index=False)
 

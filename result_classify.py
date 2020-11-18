@@ -76,10 +76,10 @@ def main():
 
 	result = pd.read_csv(result_csv)
 	result_X = result[[
-		# "window",
+		"window",
 		"Radius_average",
-		# "U_average",
-		# "p(mmHg)_average",
+		"U_average",
+		"p(mmHg)_average",
 		# "vorticity_average",
 		"Curvature_average",
 		# "Torsion_average"
