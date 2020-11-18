@@ -6,10 +6,14 @@ import numpy as np
 import vtk
 from vtk.util.numpy_support import vtk_to_numpy
 import pandas as pd
+import matplotlib
+# matplotlib.use('Agg')
+matplotlib.use("TkAgg")
 import matplotlib.pyplot as plt
 import math
 import json
 from tqdm import tqdm
+from scipy.interpolate import interp1d
 
 def readCSV(path):
 	f = open(path, 'rb')
@@ -163,37 +167,60 @@ def plot_centerline_result(centerline, array_names, result_path,minPoint=(0,0,0)
 	fig.set_size_inches(10,8)
 
 	for i in range(len(array_names)):
-		y = vtk_to_numpy(thresholdFilter.GetOutput().GetPointData().GetArray(array_names[i]))
+		for lineId in range(int(centerline.GetCellData().GetArray("CenterlineIds_average").GetMaxNorm())):
+			thresholdFilter.ThresholdBetween(lineId,lineId)
+			thresholdFilter.Update()
 
-		if len(y.shape) > 1:
-			if y.shape[1] == 3:
-				y = [math.sqrt(value[0]**2 + value[1]**2 +value[2]**2 ) for value in y]
-				
-		if len(array_names) == 1:
-			ax = axs
-		else:
-			ax = axs[i]
+			x = vtk_to_numpy(thresholdFilter.GetOutput().GetPointData().GetArray("Abscissas_average"))
+			x = [(value - x[0]) for value in x]
 
-		ax.plot(x,y)
+			y = vtk_to_numpy(thresholdFilter.GetOutput().GetPointData().GetArray(array_names[i]))
+
+			if len(y.shape) > 1:
+				if y.shape[1] == 3:
+					y = [math.sqrt(value[0]**2 + value[1]**2 +value[2]**2 ) for value in y]
+					
+			if len(array_names) == 1:
+				ax = axs
+			else:
+				ax = axs[i]
+
+			order = np.argsort(x)
+			xs = np.array(x)[order]
+			ys = np.array(y)[order]
+
+			ax.plot(xs,ys)
 
 		if array_names[i] == "Radius_average":
 			ylabel = "Radius (mm)"
-			ymax = 2.5
+			ymin=0
+			ymax = 5
 		elif array_names[i] == "U_average":
 			ylabel = "Velocity (ms^-1)"
-			ymax = 2.0
+			ymin=0
+			ymax = 3
 		elif array_names[i] == "p(mmHg)_average":
 			ylabel = "Pressure (mmHg)"
-			ymax = 80
+			ymin=0
+			ymax = 180
 		elif array_names[i] == "vorticity_average":
-			ylabel = "vorticity (s^-1)"
-			ymax = 1000
+			ylabel = "Vorticity (s^-1)"
+			ymin=0
+			ymax = 4000
+		elif array_names[i] == "Curvature_average":
+			ylabel = "Curvature"
+			ymin = -1.5
+			ymax = 1.5
+		elif array_names[i] == "Torsion_average":
+			ylabel = "Torsion"
+			ymin = -100000
+			ymax = 100000
 
 		if bifurcationPoint !=(0,0,0):
-			ax.axvline(x=bifPointAbscissas,ymin=0,ymax=ymax,linestyle ="--",color='m')
+			ax.axvline(x=bifPointAbscissas,ymin=ymin,ymax=ymax,linestyle ="--",color='m')
 
 		if minPoint !=(0,0,0):
-			ax.axvline(x=minPointAbscissas,ymin=0,ymax=ymax,linestyle ="--",color='c')
+			ax.axvline(x=minPointAbscissas,ymin=ymin,ymax=ymax,linestyle ="--",color='c')
 
 		ax.set_ylabel(ylabel)
 		if i == (len(array_names)-1):
@@ -201,7 +228,7 @@ def plot_centerline_result(centerline, array_names, result_path,minPoint=(0,0,0)
 		else:
 			ax.set_xticklabels([])
 		ax.set_xlim(x[0],x[-1])
-		ax.set_ylim(0,ymax)
+		ax.set_ylim(ymin,ymax)
 		
 	# save the plot 
 	plt.savefig(result_path,dpi=100)
@@ -254,10 +281,16 @@ def centerline_probe_result(centerline_file,vtk_file_list, output_dir,minPoint=(
 		interpolator.Update()
 
 		# convert to desired unit
+		# get the first element pressure
+		try:
+			first_point_pressure = interpolator.GetOutput().GetPointData().GetArray("p").GetValue(0)
+		except:
+			first_point_pressure = 120
+
 		converter = vtk.vtkArrayCalculator()
 		converter.SetInputData(interpolator.GetOutput())
 		converter.AddScalarArrayName("p")
-		converter.SetFunction("p * 921 * 0.0075") # 921 = mu/nu = density of blood, 0.0075 converts from Pascal to mmHg
+		converter.SetFunction("120 + (p - {}) * 921 * 0.0075".format(first_point_pressure)) # 921 = mu/nu = density of blood, 0.0075 converts from Pascal to mmHg, offset 120mmHg at ica
 		converter.SetResultArrayName("p(mmHg)")
 		converter.Update()
 
@@ -294,7 +327,7 @@ def centerline_probe_result(centerline_file,vtk_file_list, output_dir,minPoint=(
 	plot_result_path = os.path.join(os.path.dirname(centerline_file),output_dir,"result.png")
 	plot_centerline_result(
 		averageFilter.GetOutput(),
-		["Radius_average","U_average","p(mmHg)_average","vorticity_average"], 
+		["Radius_average","U_average","p(mmHg)_average","vorticity_average","Curvature_average","Torsion_average"], 
 		plot_result_path,
 		minPoint = minPoint,
 		bifurcationPoint = bifurcationPoint)
@@ -321,8 +354,10 @@ def centerline_probe_result(centerline_file,vtk_file_list, output_dir,minPoint=(
 			}
 
 	# compute result values
+	abscissas = vtk_to_numpy(thresholdFilter.GetOutput().GetPointData().GetArray("Abscissas_average"))
 	radius = vtk_to_numpy(thresholdFilter.GetOutput().GetPointData().GetArray("Radius_average"))
 	pressure = vtk_to_numpy(thresholdFilter.GetOutput().GetPointData().GetArray("p(mmHg)_average"))
+	pressure_gradient = np.diff(pressure)/np.diff(abscissas)
 	velocity = vtk_to_numpy(thresholdFilter.GetOutput().GetPointData().GetArray("U_average"))
 	velocity = [math.sqrt(value[0]**2 + value[1]**2 +value[2]**2 ) for value in velocity]
 	vorticity = vtk_to_numpy(thresholdFilter.GetOutput().GetPointData().GetArray("vorticity_average"))
@@ -332,7 +367,7 @@ def centerline_probe_result(centerline_file,vtk_file_list, output_dir,minPoint=(
 		'radius mean(mm)': np.mean(radius),
 		'radius min(mm)': np.min(radius),
 		'pressure mean(mmHg)': np.mean(pressure),
-		'max pressure gradient(mmHg)': np.mean(heapq.nlargest(5, pressure)) - np.mean(heapq.nsmallest(5,pressure)),
+		'max pressure gradient(mmHg)': np.mean(heapq.nlargest(5, pressure_gradient)),
 		'in/out pressure gradient(mmHg)': np.mean(pressure[0:5]) - np.mean(pressure[-5:]),
 		'velocity mean(ms^-1)': np.mean(velocity),
 		'peak velocity(ms^-1)': np.mean(heapq.nlargest(5, velocity)),
@@ -340,9 +375,174 @@ def centerline_probe_result(centerline_file,vtk_file_list, output_dir,minPoint=(
 		'peak vorticity(s^-1)': np.mean(heapq.nlargest(5, vorticity))
 	}
 
-	return return_value
+	# moving variance matrix
+	mv_fields = [
+		"Radius_average",
+		"U_average",
+		"p(mmHg)_average",
+		"vorticity_average",
+		"Curvature_average",
+		"Torsion_average"
+		]
+	mv_windows = np.arange(3,10,2)
+	plot_result_path = os.path.join(os.path.dirname(centerline_file),output_dir,"moving_variance.png")
 
-def probe_min_max_point(centerline_filename, surface_filename, minPoint = (0,0,0), maxPoint = (0,0,0)):
+	mv_matrix_df = moving_variance_matrix(averageFilter.GetOutput(),mv_fields,mv_windows,
+		minPoint = minPoint,
+		bifurcationPoint = bifurcationPoint,
+		result_path = plot_result_path)
+
+	return return_value, mv_matrix_df
+
+def rolling_window(a, window):
+	pad = np.zeros(len(a.shape), dtype=np.int32)
+	pad[-1] = window-1
+	pad = list(zip(pad, np.zeros(len(a.shape), dtype=np.int32)))
+	a = np.pad(a, pad,mode='edge')
+	shape = a.shape[:-1] + (a.shape[-1] - window + 1, window)
+	strides = a.strides + (a.strides[-1],)
+
+	return np.lib.stride_tricks.as_strided(a, shape=shape, strides=strides)
+
+def moving_variance_matrix(centerline,fields, windows, minPoint=(0,0,0), bifurcationPoint=(0,0,0), result_path=""):
+	# create input array from centerline
+	thresholdFilter = vtk.vtkThreshold()
+	thresholdFilter.SetInputData(centerline)
+	thresholdFilter.SetInputArrayToProcess(0, 0, 0, vtk.vtkDataObject.FIELD_ASSOCIATION_CELLS, "CenterlineIds_average")
+	thresholdFilter.Update()
+
+	fig, axs = plt.subplots(len(fields),1)
+	fig.suptitle("CFD Moving Variance")
+	fig.set_size_inches(10,8)
+
+	# build kd tree to locate the nearest point
+	# Create kd tree
+	kDTree = vtk.vtkKdTreePointLocator()
+	kDTree.SetDataSet(centerline)
+	kDTree.BuildLocator()
+
+	# get the abscissas of bifurcation point
+	if bifurcationPoint != (0,0,0):
+		iD = kDTree.FindClosestPoint(bifurcationPoint)
+		# Get the id of the closest point
+		bifPointAbscissas = kDTree.GetDataSet().GetPointData().GetArray("Abscissas_average").GetTuple(iD)[0] - \
+			vtk_to_numpy(thresholdFilter.GetOutput().GetPointData().GetArray("Abscissas_average"))[0]
+
+	# get the abscissas of min point
+	if minPoint != (0,0,0):
+		iD = kDTree.FindClosestPoint(minPoint)
+		# Get the id of the closest point
+		minPointAbscissas = kDTree.GetDataSet().GetPointData().GetArray("Abscissas_average").GetTuple(iD)[0] - \
+			vtk_to_numpy(thresholdFilter.GetOutput().GetPointData().GetArray("Abscissas_average"))[0]
+
+	col_name = ["branch","window"] + fields
+	pmv_df = pd.DataFrame(columns=col_name)
+
+	for lineId in range(int(centerline.GetCellData().GetArray("CenterlineIds_average").GetMaxNorm())):
+		a_x = []
+		a_y = []
+
+		thresholdFilter.ThresholdBetween(lineId,lineId)
+		thresholdFilter.Update()
+
+		# need at least 3 points to perform interpolation
+		if thresholdFilter.GetOutput().GetNumberOfPoints() < 4:
+			continue
+
+		for i in range(len(fields)):
+			x = vtk_to_numpy(thresholdFilter.GetOutput().GetPointData().GetArray("Abscissas_average"))
+			x = [(value - x[0]) for value in x]
+
+			y = vtk_to_numpy(thresholdFilter.GetOutput().GetPointData().GetArray(fields[i]))
+
+			if len(y.shape) > 1:
+				if y.shape[1] == 3:
+					y = [math.sqrt(value[0]**2 + value[1]**2 +value[2]**2 ) for value in y]
+					
+			order = np.argsort(x)
+			xs = np.array(x)[order]
+			ys = np.array(y)[order]
+
+			unique, index = np.unique(xs, axis=-1, return_index=True)
+			xs = xs[index]
+			ys = ys[index]
+
+			f = interp1d(xs,ys,kind="cubic")
+			xnew = np.linspace(0, np.amax(x), num=50, endpoint=True)
+			ynew = f(xnew)
+
+			a_x.append(xnew)
+			a_y.append(ynew)
+
+		a_x = np.array(a_x)
+		a_y = np.array(a_y)
+
+		for window in windows:
+			mv = np.var(rolling_window(a_y, window) , axis=-1)
+
+			pmv = np.amax(mv,axis=-1)
+			pmv = np.concatenate(([lineId,window],pmv))
+			pmv_df.loc[len(pmv_df)] = pmv
+
+			for i in range(len(fields)):
+				# plot moving variance
+				if len(fields) == 1:
+					ax = axs
+				else:
+					ax = axs[i]
+
+				ax.plot(a_x[i,:],mv[i,:])
+
+				if fields[i] == "Radius_average":
+					ylabel = "Radius (mm)"
+					ymin = 0
+					ymax = 0.5
+				elif fields[i] == "U_average":
+					ylabel = "Velocity (ms^-1)"
+					ymin = 0
+					ymax = 0.5
+				elif fields[i] == "p(mmHg)_average":
+					ylabel = "Pressure (mmHg)"
+					ymin = 0
+					ymax = 1e3
+				elif fields[i] == "vorticity_average":
+					ylabel = "Vorticity (s^-1)"
+					ymin = 0
+					ymax = 1e7
+				elif fields[i] == "Curvature_average":
+					ylabel = "Curvature"
+					ymin = 0
+					ymax = 1e0
+				elif fields[i] == "Torsion_average":
+					ylabel = "Torsion"
+					ymin = 0
+					ymax = 1e9
+
+				if bifurcationPoint !=(0,0,0):
+					ax.axvline(x=bifPointAbscissas,ymin=0,ymax=1,linestyle="--",color='m')
+
+				if minPoint !=(0,0,0):
+					ax.axvline(x=minPointAbscissas,ymin=0,ymax=1,linestyle="--",color='c')
+
+				ax.set_ylabel(ylabel)
+				if i == (len(fields)-1):
+					ax.set_xlabel("Abscissas (mm)")
+				else:
+					ax.set_xticklabels([])
+				ax.set_xlim(x[0],x[-1])
+				ax.set_ylim(ymin,ymax)
+
+	# save the plot 
+	plt.savefig(result_path,dpi=100)
+	plt.clf()
+	plt.close("all")
+
+	pmv_df = pmv_df.groupby(['window']).max()
+	pmv_df = pmv_df.drop(columns=['branch'])
+
+	return pmv_df
+
+def probe_min_max_point(centerline_filename, surface_filename, minPoint=(0,0,0), maxPoint=(0,0,0)):
 	centerlineReader = vtk.vtkXMLPolyDataReader()
 	centerlineReader.SetFileName(centerline)
 	centerlineReader.Update()
@@ -488,16 +688,16 @@ def probe_min_max_point(centerline_filename, surface_filename, minPoint = (0,0,0
 	return DoS, minPoint, maxPoint
 
 def result_analysis(case_dir, minPoint=(0,0,0), maxPoint=(0,0,0), probe=False):
-	centerline = os.path.join(case_dir, "centerline_clipped.vtp")
-	surface = os.path.join(case_dir, "surface_capped.stl")
+	# load domain json file
+	with open(os.path.join(case_dir,"domain.json")) as f:
+		domain = json.load(f)
+
+	centerline = os.path.join(case_dir, domain["centerline"]["filename"])
+	surface = os.path.join(case_dir, domain["domain"]["filename"])
 	output_dir = os.path.join(case_dir,"CFD_OpenFOAM_result")
 
 	if probe:
 		Dos, minPoint, maxPoint = probe_min_max_point(centerline,surface,minPoint,maxPoint)
-
-	# load inlet json file
-	with open(os.path.join(case_dir,"inlets.json")) as f:
-		inlets = json.load(f)
 
 	# load last 5 time points and take average
 	results_vtk = []
@@ -505,15 +705,20 @@ def result_analysis(case_dir, minPoint=(0,0,0), maxPoint=(0,0,0), probe=False):
 	for time in range(0,2001,100):
 		results_vtk.append(os.path.join(case_dir,"CFD_OpenFOAM", "VTK","OpenFOAM_" + str(time)+".vtk"))
 	
-	return_value = centerline_probe_result(
-		os.path.join(case_dir,"centerline_clipped.vtp"),
+	try:
+		minPoint = tuple(domain["fiducial_0"]["coordinate"])
+	except:
+		minPoint = (0,0,0)
+
+	return_value, mv_matrix_df = centerline_probe_result(
+		os.path.join(case_dir,domain["centerline"]["filename"]),
 		results_vtk[-5:],
 		output_dir, 
 		minPoint=minPoint,
-		bifurcationPoint=inlets["BifurcationPoint"]["coordinate"]
+		bifurcationPoint=domain["bifurcation_point"]["coordinate"]
 		)
 
-	return return_value, minPoint, maxPoint
+	return return_value, mv_matrix_df, minPoint, maxPoint
 	
 def main():
 	group = "stent"
@@ -530,8 +735,8 @@ def main():
 		'shear strain rate mean(Pas^-1)','peak shear strain rate(Pas^-1)',
 		'vorticity mean(s^-1)','peak vorticity(s^-1)']
 
-	result_df = pd.DataFrame(columns = field_names)
-	timePoints = ['baseline','baseline-post','12months','followup']
+	result_df = pd.DataFrame(columns=field_names)
+	# timePoints = ['baseline','baseline-post','12months','followup']
 	# timePoints = ["baseline"]
 
 	pbar = tqdm(os.listdir(data_folder))
@@ -550,9 +755,52 @@ def main():
 			row = {"patient": case, "group": group, "time point": timePoint}
 			result, minPoint, maxPoint = result_analysis(os.path.join(data_folder,case,timePoint),minPoint=minPoint,maxPoint=maxPoint,probe=probe)
 			row.update(result)
-			# tqdm.write(str(row))
 			result_df = result_df.append(pd.Series(row),ignore_index=True)
 	result_df.to_csv(output_file,index=False)
 
+def main2():
+	probe=False
+	group="stenosis"
+
+	# output_file = "/mnt/DIIR-JK-NAS/data/intracranial/data_30_30/result_EASIS_medical.csv"
+	# data_folder = "/mnt/DIIR-JK-NAS/data/intracranial/data_30_30/stenosis/ESASIS_medical"
+
+	# output_file = "Z:/data/intracranial/data_30_30/result_EASIS_stent.csv"
+	# data_folder = "Z:/data/intracranial/data_30_30/stenosis/ESASIS_stent"
+
+	output_file = "Z:/data/intracranial/data_30_30/result_surgery.csv"
+	data_folder = "Z:/data/intracranial/data_30_30/surgery"
+
+	# create result dataframe
+	field_names = ['patient','group','time point',
+		'radius mean(mm)','degree of stenosis(%)','radius min(mm)',
+		'pressure mean(mmHg)','max pressure gradient(mmHg)','in/out pressure gradient(mmHg)',
+		'velocity mean(ms^-1)','peak velocity(ms^-1)',
+		'shear strain rate mean(Pas^-1)','peak shear strain rate(Pas^-1)',
+		'vorticity mean(s^-1)','peak vorticity(s^-1)']
+
+	result_df = pd.DataFrame(columns=field_names)
+
+	# pbar = tqdm(os.listdir(data_folder)[19:])
+	pbar = tqdm(["ChanManShan"])
+	for case in pbar:
+		pbar.set_description(case)
+		minPoint = (0,0,0)
+		maxPoint = (0,0,0)
+
+		if not os.path.exists(os.path.join(data_folder,case)):
+			continue
+
+		row = {"patient": case, "group": group, "time point": "baseline"}
+		result, mv_matrix_df, minPoint, maxPoint = result_analysis(os.path.join(data_folder,case),minPoint=minPoint,maxPoint=maxPoint,probe=probe)
+		row.update(result)
+		result_df = result_df.append(pd.Series(row),ignore_index=True)
+
+		# save the moving variance matrix
+		mv_matrix_df.to_csv(os.path.join(data_folder,case,"mv_matrix.csv"),index=True)
+
+	result_df.to_csv(output_file,index=False)
+
 if __name__=="__main__":
-	main()
+	# main()
+	main2()
