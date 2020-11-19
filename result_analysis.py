@@ -14,6 +14,7 @@ import math
 import json
 from tqdm import tqdm
 from scipy.interpolate import interp1d
+from scipy.optimize import curve_fit
 
 def readCSV(path):
 	f = open(path, 'rb')
@@ -130,6 +131,9 @@ class MyInteractorStyle(vtk.vtkInteractorStyleTrackballCamera):
 
 		return
 
+def fit_func(x, a, b, c):
+	return a * b*(x+c) * np.exp(-b * (x+c)**2)
+
 def plot_centerline_result(centerline, array_names, result_path, dev_result_path ,minPoint=(0,0,0),bifurcationPoint=(0,0,0)):
 	# extract ica
 	thresholdFilter = vtk.vtkThreshold()
@@ -170,7 +174,11 @@ def plot_centerline_result(centerline, array_names, result_path, dev_result_path
 	fig2.suptitle("CFD result derivatives")
 	fig2.set_size_inches(10,8)
 
+	fit_dict= {}
+
 	for i in range(len(array_names)):
+		popt_list = []
+
 		for lineId in range(int(centerline.GetCellData().GetArray("CenterlineIds_average").GetMaxNorm())):
 			thresholdFilter.ThresholdBetween(lineId,lineId)
 			thresholdFilter.Update()
@@ -208,30 +216,54 @@ def plot_centerline_result(centerline, array_names, result_path, dev_result_path
 			ax.plot(xs,ys)
 			ax2.plot(xs,dys)
 
+			# curve fitting on specific values
+			if array_names[i] == "U_average" or array_names[i] == "p(mmHg)_average":
+				try:
+					popt, pcov = curve_fit(fit_func, xs, dys, p0=[50,0.1,-50])
+
+					yfit = fit_func(xs, *popt)
+					ax2.plot(xs, fit_func(xs, *popt), 'k-.',label='fit: a=%5.3f, b=%5.3f, c=%5.3f' % tuple(popt))
+				except RuntimeError:
+					popt = [0,0,0]
+
+				popt_list.append(popt)
+
 		if array_names[i] == "Radius_average":
 			ylabel = "Radius (mm)"
 			ymin=0
 			ymax = 5
+			ymin2=-5
+			ymax2 = 5
 		elif array_names[i] == "U_average":
 			ylabel = "Velocity (ms^-1)"
 			ymin=0
 			ymax = 3
+			ymin2=-3
+			ymax2 = 3
 		elif array_names[i] == "p(mmHg)_average":
 			ylabel = "Pressure (mmHg)"
 			ymin=0
 			ymax = 180
+			ymin2=-180
+			ymax2 = 180
 		elif array_names[i] == "vorticity_average":
 			ylabel = "Vorticity (s^-1)"
 			ymin=0
 			ymax = 4000
+			ymin2=-4000
+			ymax2 = 4000
 		elif array_names[i] == "Curvature_average":
 			ylabel = "Curvature"
 			ymin = -1.5
 			ymax = 1.5
+			ymin2 = -1.5
+			ymax2 = 1.5
 		elif array_names[i] == "Torsion_average":
 			ylabel = "Torsion"
 			ymin = -100000
 			ymax = 100000
+			ymin2 = -100000
+			ymax2 = 100000
 
 		if bifurcationPoint !=(0,0,0):
 			ax.axvline(x=bifPointAbscissas,ymin=ymin,ymax=ymax,linestyle ="--",color='m')
@@ -252,7 +284,11 @@ def plot_centerline_result(centerline, array_names, result_path, dev_result_path
 		ax.set_xlim(x[0],x[-1])
 		ax.set_ylim(ymin,ymax)
 		ax2.set_xlim(x[0],x[-1])
-		ax2.set_ylim(ymin,ymax)
+		ax2.set_ylim(ymin2,ymax2)
+
+		# max of popt[0]
+		if len(popt_list) > 0:
+			fit_dict.update({array_names[i]: np.abs(np.amax(np.array(popt_list),axis=0)[0])})
 		
 	# save the plot 
 	fig.savefig(result_path,dpi=100)
@@ -262,6 +298,8 @@ def plot_centerline_result(centerline, array_names, result_path, dev_result_path
 	fig2.clf()
 
 	plt.close("all")
+
+	return fit_dict
 
 def centerline_probe_result(centerline_file,vtk_file_list, output_dir,minPoint=(0,0,0), bifurcationPoint=(0,0,0)):
 	# read centerline
@@ -354,7 +392,7 @@ def centerline_probe_result(centerline_file,vtk_file_list, output_dir,minPoint=(
 	# plot result
 	plot_result_path = os.path.join(os.path.dirname(centerline_file),output_dir,"result.png")
 	dev_plot_result_path = os.path.join(os.path.dirname(centerline_file),output_dir,"result_dev.png")
-	plot_centerline_result(
+	fit_dict = plot_centerline_result(
 		averageFilter.GetOutput(),
 		["Radius_average","U_average","p(mmHg)_average","vorticity_average","Curvature_average","Torsion_average"], 
 		plot_result_path,
@@ -378,6 +416,7 @@ def centerline_probe_result(centerline_file,vtk_file_list, output_dir,minPoint=(
 			'max pressure gradient(mmHg)': "NA",
 			'in/out pressure gradient(mmHg)': "NA",
 			'velocity mean(ms^-1)': "NA",
+			'max velocity gradient(ms^-1)': "NA",
 			'peak velocity(ms^-1)': "NA",
 			'vorticity mean(s^-1)': "NA",
 			'peak vorticity(s^-1)': "NA"
@@ -397,10 +436,12 @@ def centerline_probe_result(centerline_file,vtk_file_list, output_dir,minPoint=(
 		'radius mean(mm)': np.mean(radius),
 		'radius min(mm)': np.min(radius),
 		'pressure mean(mmHg)': np.mean(pressure),
-		'max pressure gradient(mmHg)': np.mean(heapq.nlargest(5, pressure_gradient)),
+		# 'max pressure gradient(mmHg)': np.mean(heapq.nlargest(5, pressure_gradient)),
+		'max pressure gradient(mmHg)': fit_dict["p(mmHg)_average"], 
 		'in/out pressure gradient(mmHg)': np.mean(pressure[0:5]) - np.mean(pressure[-5:]),
 		'velocity mean(ms^-1)': np.mean(velocity),
 		'peak velocity(ms^-1)': np.mean(heapq.nlargest(5, velocity)),
+		'max velocity gradient(ms^-1)': fit_dict["U_average"],
 		'vorticity mean(s^-1)': np.mean(vorticity),
 		'peak vorticity(s^-1)': np.mean(heapq.nlargest(5, vorticity))
 	}
@@ -830,33 +871,42 @@ def main2():
 	# output_file = "/mnt/DIIR-JK-NAS/data/intracranial/data_30_30/result_EASIS_medical.csv"
 	# data_folder = "/mnt/DIIR-JK-NAS/data/intracranial/data_30_30/stenosis/ESASIS_medical"
 
-	output_file = "Z:/data/intracranial/data_30_30/result_EASIS_medical.csv"
-	data_folder = "Z:/data/intracranial/data_30_30/stenosis/ESASIS_medical"
+	# output_file = "Z:/data/intracranial/data_30_30/result_EASIS_medical.csv"
+	# data_folder = "Z:/data/intracranial/data_30_30/stenosis/ESASIS_medical"
 
-	output_file = "Z:/data/intracranial/data_30_30/result_EASIS_stent.csv"
-	data_folder = "Z:/data/intracranial/data_30_30/stenosis/ESASIS_stent"
+	# output_file = "Z:/data/intracranial/data_30_30/result_EASIS_stent.csv"
+	# data_folder = "Z:/data/intracranial/data_30_30/stenosis/ESASIS_stent"
 
-	# output_file = "Z:/data/intracranial/data_30_30/result_surgery.csv"
-	# data_folder = "Z:/data/intracranial/data_30_30/surgery"
+	output_file = "Z:/data/intracranial/data_30_30/result_surgery.csv"
+	data_folder = "Z:/data/intracranial/data_30_30/surgery"
 
 	# create result dataframe
-	field_names = ['patient','group','time point',
+	field_names = ['patient','group','stage',
 		'radius mean(mm)','degree of stenosis(%)','radius min(mm)',
 		'pressure mean(mmHg)','max pressure gradient(mmHg)','in/out pressure gradient(mmHg)',
-		'velocity mean(ms^-1)','peak velocity(ms^-1)',
-		'shear strain rate mean(Pas^-1)','peak shear strain rate(Pas^-1)',
+		'velocity mean(ms^-1)','peak velocity(ms^-1)','max velocity gradient(ms^-1)',
 		'vorticity mean(s^-1)','peak vorticity(s^-1)']
 
 	result_df = pd.DataFrame(columns=field_names)
 
-	pbar = tqdm(os.listdir(data_folder)[0:])
+	pbar = tqdm(os.listdir(data_folder)[:])
 	# pbar = tqdm(["ChanVaHong"])
+
+	ignore_case = [
+		"ChanSiuYung",
+		"ChuFongShu",
+		"ChanMeiLing"
+	]
+
 	for case in pbar:
 		pbar.set_description(case)
 		minPoint = (0,0,0)
 		maxPoint = (0,0,0)
 
 		if not os.path.exists(os.path.join(data_folder,case)):
+			continue
+
+		if case in ignore_case:
 			continue
 
 		row = {"patient": case, "group": group, "time point": "baseline"}

@@ -35,6 +35,8 @@ def PCA_2D(X,Y):
 			)
 	ax.legend(targets)
 	ax.grid()
+	plt.xscale('symlog')
+	# plt.yscale('symlog')
 	plt.show()
 
 def PCA_3D(X,Y):
@@ -76,19 +78,30 @@ def main():
 
 	result = pd.read_csv(result_csv)
 	result_X = result[[
-		"window",
+		# "window",
 		"Radius_average",
 		"U_average",
 		"p(mmHg)_average",
-		# "vorticity_average",
-		"Curvature_average",
-		# "Torsion_average"
+		"vorticity_average",
+		# "Curvature_average",
+		# "Torsion_average",
+		"Radius_average_dev",
+		"U_average_dev",
+		"p(mmHg)_average_dev",
+		"vorticity_average_dev",
+		# "Curvature_average_dev",
+		# "Torsion_average_dev"
 		]]
 
 	result_Y = result[["dataset"]]
 
-	result_X_array = result_X.to_numpy()
-	result_Y_array = result_Y.to_numpy()[:,0]
+	result_X_array = np.sqrt(result_X.to_numpy())
+	result_Y_array = np.sqrt(result_Y.to_numpy()[:,0])
+
+	# result_X_array = np.log(np.sqrt(result_X.to_numpy()))
+	# result_Y_array = np.log(np.sqrt(result_Y.to_numpy()[:,0]))
+
+	print(np.max(result_X_array),np.max(result_Y_array))
 
 	PCA_2D(result_X_array,result_Y_array)
 	# PCA_3D(result_X_array,result_Y_array)
