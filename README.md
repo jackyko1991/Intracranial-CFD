@@ -7,7 +7,7 @@ A tool collection to perform vessel segmentation based on 3DRA and post contrast
 2. Image registration (external process, recommend to use 3D slicer if manual initialization is needed)
 3. Located the defected point
 4. Crop the image to smaller VOI
-5. Vessel segmentation with multiple Otsu thresholding
+5. Vessel segmentation with multiple Otsu thresholding/ CNN methods
 6. Refinement on the segmented data (optional)
 4. Extract surface as VTK file
 6. Vessel centerline extraction

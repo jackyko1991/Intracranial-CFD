@@ -198,6 +198,7 @@ def edit_snappyHexMeshDict(dictionary, domain_json):
 				continue
 
 		snappyHexMeshDict["geometry"]["domain_capped.stl"]["regions"] = regions
+<<<<<<< HEAD
 
 		# castellation control
 		regions = {"vessel":{"level":"(3 4)", "patchInfo":{"type": "wall",}}}
@@ -213,6 +214,23 @@ def edit_snappyHexMeshDict(dictionary, domain_json):
 
 		snappyHexMeshDict["castellatedMeshControls"]["refinementSurfaces"]["Geometry"]["regions"] = regions
 
+=======
+
+		# castellation control
+		regions = {"vessel":{"level":"(3 4)", "patchInfo":{"type": "wall",}}}
+
+		for key, value in domain_dict.items():
+			try:
+				if value["type"] == "inlet" or value["type"] == "outlet":
+					regions.update({key: {"level": "(4 4)", "patchInfo":{"type":"patch"}}})
+				else:
+					continue
+			except:
+				continue
+
+		snappyHexMeshDict["castellatedMeshControls"]["refinementSurfaces"]["Geometry"]["regions"] = regions
+
+>>>>>>> 4bf8625db0bc7b5e60c6a1980e189bfc1d3ac9ad
 		# location in mesh
 		snappyHexMeshDict["castellatedMeshControls"]["locationInMesh"] = "(" + \
 			str(domain_dict["bifurcation_point"]["coordinate"][0]/1000) + " " + \
@@ -479,6 +497,7 @@ def main():
 
 		for case in pbar:
 			pbar.set_description(case)
+
 			for phase in phases:
 				if not os.path.exists(os.path.join(data_dir,sub_data_dir,case,phase)):
 					continue

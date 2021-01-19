@@ -154,6 +154,8 @@ def LabelToSurface(label_path, surface_path, lcc=False, smoothIterations=15,rela
 	writer.SetInputData(surface)
 	writer.Update()
 
+	tqdm.write("Convert segmentation label to surface file complete: {}".format(label_path))
+
 def crop_defected_region(image_path, defected_point_csv_path, cropped_image_path,crop_size=[50,50,50]):
 	reader = sitk.ImageFileReader()
 	reader.SetFileName(image_path)
@@ -226,7 +228,9 @@ def main():
 		# pbar = tqdm(os.listdir(os.path.join(data_folder,tx_type)))
 
 	for sub_data_folder in sub_data_folders:
-		pbar = tqdm(os.listdir(os.path.join(data_folder,sub_data_folder)))
+		# datalist = os.listdir(os.path.join(data_folder,sub_data_folder))
+		datalist = ["ChanPitChuen"]
+		pbar = tqdm(datalist)
 		for case in pbar:
 			pbar.set_description(case)
 
@@ -245,15 +249,15 @@ def main():
 
 				#if os.path.exists(output_surface):
 				#	continue
-
+				
 				# Extract3DRA(data_folder + "baseline/3DRA.nii",data_folder + "baseline/seg_vessel.nii")
 				# Extract3DRA(data_folder + "baseline-post/3DRA.nii",data_folder + "baseline-post/seg_vessel.nii")
 				# Extract3DRA(data_folder + "12months/3DRA.nii",data_folder + "12months/seg_vessel.nii")
 				# ExtractCBCT(data_folder + "followup/CBCT.nii",data_folder + "followup/seg_vessel.nii")
 				if phase=="followup":
-					LabelToSurface(label_file, output_surface,relaxationFactor=0.5)
+					LabelToSurface(label_file, output_surface,lcc=True,relaxationFactor=0.5)
 				else:
-					LabelToSurface(label_file, output_surface,relaxationFactor=0.1)
+					LabelToSurface(label_file, output_surface,lcc=True,relaxationFactor=0.1)
 				# crop_defected_region(os.path.join(data_folder,"3DRA","3DRA.nii"), os.path.join(data_folder,"defected_point.fcsv"),os.path.join(data_folder,"3DRA","3DRA_cropped.nii.gz"))
 				# crop_defected_region(os.path.join(data_folder,"3DRA","3DRA_seg.nii.gz"), os.path.join(data_folder,"defected_point.fcsv"),os.path.join(data_folder,"3DRA","3DRA_seg_cropped.nii.gz"))
 				# crop_defected_region(os.path.join(data_folder,"CBCT","CBCT_reg.nii"), os.path.join(data_folder,"defected_point.fcsv"),os.path.join(data_folder,"CBCT","CBCT_reg_cropped.nii.gz"))

@@ -54,3 +54,16 @@ Test results are as following:
 - OpenFOAM User Guide version 7 (http://foam.sourceforge.net/docs/Guides-a4/OpenFOAMUserGuide-A4.pdf)
 - Online OpenFOAM UserGuide (https://www.openfoam.com/documentation/user-guide/index.php)
 - OpenFOAM - open source CFD toolbox (https://events.prace-ri.eu/event/729/contributions/590/attachments/712/1015/Introduction_to_OpenFOAM_agrm_20180925.pdf)
+
+## Output
+### Units
+Density of blood = 1060kgm^-3
+Pressure in mmHg = rho normalized pressure p* * density * 0.00750062mmHg/Pa = p* 7.95066 mmHg
+
+- VTK file: 
+	- velocity: ms-1 (after 1000x scaling)
+	- pressure: 
+
+- OpenFOAM file: 
+	- velocity: ms^-1 (after 1000x scaling)
+	- pressure: 1e-3 ms^-1

@@ -15,29 +15,48 @@ internalField uniform (0 0 0);
 
 boundaryField
 {
+  boundary_0
+  {
+    type fixedValue;
+    value uniform (-0.0010630210901620407 0.1338238418560037 0.2964964406819435);
+  }
+  boundary_1
+  {
+    inletValue uniform (0 0 0);
+    type inletOutlet;
+    value uniform (0 0 0);
+  }
+  boundary_2
+  {
+    inletValue uniform (0 0 0);
+    type inletOutlet;
+    value uniform (0 0 0);
+  }
+  boundary_3
+  {
+    inletValue uniform (0 0 0);
+    type inletOutlet;
+    value uniform (0 0 0);
+  }
+  boundary_4
+  {
+    inletValue uniform (0 0 0);
+    type inletOutlet;
+    value uniform (0 0 0);
+  }
+  boundary_5
+  {
+    inletValue uniform (0 0 0);
+    type inletOutlet;
+    value uniform (0 0 0);
+  }
   vessel
   {
     type noSlip;
-  }
-  ICA
-  {
-    type fixedValue;
-    value uniform (-0.00045767783115359086 -0.00018605352058127705 0.0017308711940378053);
-  }
-  MCA
-  {
-    type inletOutlet;
-    inletValue uniform (0 0 0);
-    value uniform (0 0 0);
-  }
-  ACA
-  {
-    type inletOutlet;
-    inletValue uniform (0 0 0);
-    value uniform (0 0 0);
   }
   walls
   {
     type empty;
   }
 } 	// ************************************************************************* //
+
