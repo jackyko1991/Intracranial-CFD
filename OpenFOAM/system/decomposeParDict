@@ -10,20 +10,20 @@ FoamFile
  object decomposeParDict;
 }
 
-numberOfSubdomains 2;
+numberOfSubdomains 8;
 
 method hierarchical; 	//method          scotch;
 
 simpleCoeffs
 {
   delta 0.001;
-  n (2 1 1);
+  n (2 2 2);
 }
 
 hierarchicalCoeffs
 {
   delta 0.001;
-  n (2 1 1);
+  n (2 2 2);
   order xyz;
 }
 
