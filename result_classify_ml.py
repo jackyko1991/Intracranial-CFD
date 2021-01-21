@@ -7,8 +7,10 @@ from sklearn import metrics
 from sklearn import svm
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import accuracy_score, classification_report, roc_curve, auc
-from sklearn.neural_network import MLPRegressor
+from sklearn.neural_network import MLPClassifier
 from sklearn.preprocessing import label_binarize
+import matplotlib
+matplotlib.use('TkAgg')
 import matplotlib.pyplot as plt
 
 class Model:
@@ -40,7 +42,7 @@ class Model:
 		elif self.method == "LogisticRegression":
 			clf = LogisticRegression(random_state=0)
 		elif self.method == "NN":
-			clf = MLPRegressor(random_state=1, max_iter=500)
+			clf = MLPClassifier(hidden_layer_sizes=(128, 64, 32),random_state=1, max_iter=1000)
 
 		clf = OneVsRestClassifier(clf)
 		clf.fit(self.X_train, self.y_train)
@@ -101,10 +103,11 @@ class Model:
 		return
 
 def main():
-	result_csv = "Z:/projects/intracranial/results.csv"
+	# result_csv = "Z:/projects/intracranial/results.csv"
+	result_csv = "/Volumes/shared/projects/intracranial/results.csv"
 	result = pd.read_csv(result_csv)
-	# method = "RandomForest"
-	method = "LogisticRegression"
+	method = "RandomForest"
+	# method = "LogisticRegression"
 	# method = "SVM_Linear"
 	# method = "SVM_RBF"
 	# method = "NN"
@@ -125,10 +128,16 @@ def main():
 	result_Y = result[["Stroke","Severity","ICAD"]]
 
 	result_X_array = result_X.to_numpy()
-	classes = [0,1,2]
-	classnames = ["normal","moderate","severe"]
+	# severity
+	# classes = [0,1,2]
+	# classnames = ["normal","moderate","severe"]
+	classes = [0,1]
+	classnames = ["normal","ICAD"]
 	n_classes = len(classes)
+
+	# stroke: [:,0], severity: [:,1], "icad": [:,2]
 	result_Y_array = label_binarize(result_Y.to_numpy()[:,1],classes=classes)
+	result_Y_array = label_binarize(result_Y.to_numpy()[:,2],classes=classes)
 
 	# model
 	model = Model(method=method)
@@ -177,12 +186,56 @@ def main():
 
 		for j in range(n_classes):
 			# training
-			fpr_train[j], tpr_train[j], _ = roc_curve(y_train[:, j], clf.decision_function(X_train)[:,j])
+			if "SVM" in method or "LogisticRegression" in method:
+				if n_classes >2:
+					fpr_train[j], tpr_train[j], _ = roc_curve(y_train[:, j], clf.decision_function(X_train)[:,j])
+				else:
+					if j == 0:
+						fpr_train[j], tpr_train[j], _ = roc_curve(1 - y_train, 1- clf.decision_function(X_train))
+					else:
+						fpr_train[j], tpr_train[j], _ = roc_curve(y_train, clf.decision_function(X_train))
+			# elif "RandomForest" in method or "NN" in method:
+			else:
+				if n_classes >2:
+					fpr_train[j], tpr_train[j], _ = roc_curve(y_train[:, j], clf.predict_proba(X_train)[:,j])
+				else:
+					if j ==0:
+						fpr_train[j], tpr_train[j], _ = roc_curve(1 - y_train, clf.predict_proba(X_train)[:,j])
+					else:
+						fpr_train[j], tpr_train[j], _ = roc_curve(y_train, clf.predict_proba(X_train)[:,j])
+			# else:
+			# 	if n_classes > 2:
+			# 		fpr_train[j], tpr_train[j], _ = roc_curve(y_train[:, j], clf.predict(X_train)[:,j])					
+			# 	else:
+			# 		fpr_train[j], tpr_train[j], _ = roc_curve(y_train[:, j], label_binarize(clf.predict(X_train),classes=classes)[:,j])
+
 			roc_auc_train[j] = auc(fpr_train[j], tpr_train[j])
 			axs[0,j].plot(fpr_train[j],tpr_train[j], label="fold {} (AUC = {:.2f})".format(i, roc_auc_train[j]),alpha=0.3, lw=1)
 
 			# testing
-			fpr_test[j], tpr_test[j], _ = roc_curve(y_test[:, j], clf.decision_function(X_test)[:,j])
+			if "SVM" in method or "LogisticRegression" in method:
+				if n_classes >2:
+					fpr_test[j], tpr_test[j], _ = roc_curve(y_test[:, j], clf.decision_function(X_test)[:,j])
+				else:
+					if j == 0:
+						fpr_test[j], tpr_test[j], _ = roc_curve(1 - y_test, 1-clf.decision_function(X_test))
+					else:
+						fpr_test[j], tpr_test[j], _ = roc_curve(y_test, clf.decision_function(X_test))
+			# elif "RandomForest" in method or "NN" in method:
+			else:
+				if n_classes >2:
+					fpr_test[j], tpr_test[j], _ = roc_curve(y_test[:, j], clf.predict_proba(X_test)[:,j])
+				else:
+					if j == 0:
+						fpr_test[j], tpr_test[j], _ = roc_curve(1 - y_test, clf.predict_proba(X_test)[:,j])
+					else:
+						fpr_test[j], tpr_test[j], _ = roc_curve(y_test, clf.predict_proba(X_test)[:,j])
+			# else:
+			# 	if n_classes >2:
+			# 		fpr_test[j], tpr_test[j], _ = roc_curve(y_test[:, j], clf.predict(X_test)[:,j])
+			# 	else:
+			# 		fpr_test[j], tpr_test[j], _ = roc_curve(y_test[:, j], label_binarize(clf.predict(X_test),classes=classes)[:,j])
+
 			roc_auc_test[j] = auc(fpr_test[j], tpr_test[j])
 			axs[1,j].plot(fpr_test[j],tpr_test[j], label="fold {} (AUC = {:.2f})".format(i, roc_auc_test[j]),alpha=0.3, lw=1)
 
@@ -211,6 +264,12 @@ def main():
 			label='Mean ROC (AUC = {:.2f} $\pm$ {:.2f})'.format(mean_auc, std_auc),
 			lw=2, alpha=.8)
 
+		std_tpr = np.std(tprs, axis=0)
+		tprs_upper = np.minimum(mean_tpr + std_tpr, 1)
+		tprs_lower = np.maximum(mean_tpr - std_tpr, 0)
+		axs[0,i].fill_between(mean_fpr, tprs_lower, tprs_upper, color='grey', alpha=.2,
+			label=r'$\pm$ 1 std. dev.')
+
 		# test
 		tprs = []
 		for tpr, fpr in zip(tprs_test,fprs_test):
@@ -226,24 +285,11 @@ def main():
 			label='Mean ROC (AUC = {:.2f} $\pm$ {:.2f})'.format(mean_auc, std_auc),
 			lw=2, alpha=.8)
 
-	# std_tpr = np.std(tprs_train, axis=0)
-	# tprs_upper = np.minimum(mean_tpr + std_tpr, 1)
-	# tprs_lower = np.maximum(mean_tpr - std_tpr, 0)
-	# axs[0].fill_between(mean_fpr, tprs_lower, tprs_upper, color='grey', alpha=.2,
-	# 	label=r'$\pm$ 1 std. dev.')
-
-	# mean_tpr = np.mean(tprs_test, axis=0)
-	# mean_tpr[-1] = 1.0
-	# mean_auc = metrics.auc(mean_fpr, mean_tpr)
-	# std_auc = np.std(aucs_test)
-	# axs[1].plot(mean_fpr, mean_tpr, color='b',
-	# 	label='Mean ROC (AUC = {:.2f} $\pm$ {:.2f})'.format(mean_auc, std_auc),
-	# 	lw=2, alpha=.8)
-	# std_tpr = np.std(tprs_test, axis=0)
-	# tprs_upper = np.minimum(mean_tpr + std_tpr, 1)
-	# tprs_lower = np.maximum(mean_tpr - std_tpr, 0)
-	# axs[1].fill_between(mean_fpr, tprs_lower, tprs_upper, color='grey', alpha=.2,
-	# 	label=r'$\pm$ 1 std. dev.')
+		std_tpr = np.std(tprs, axis=0)
+		tprs_upper = np.minimum(mean_tpr + std_tpr, 1)
+		tprs_lower = np.maximum(mean_tpr - std_tpr, 0)
+		axs[1,i].fill_between(mean_fpr, tprs_lower, tprs_upper, color='grey', alpha=.2,
+			label=r'$\pm$ 1 std. dev.')
 
 	for i, ax in enumerate(axs.flatten()):
 		ax.legend(loc="lower right")
