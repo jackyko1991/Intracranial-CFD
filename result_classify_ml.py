@@ -103,14 +103,14 @@ class Model:
 		return
 
 def main():
-	# result_csv = "Z:/projects/intracranial/results.csv"
-	result_csv = "/Volumes/shared/projects/intracranial/results.csv"
+	result_csv = "Z:/projects/intracranial/results.csv"
+	# result_csv = "/Volumes/shared/projects/intracranial/results.csv"
 	result = pd.read_csv(result_csv)
-	method = "RandomForest"
+	# method = "RandomForest"
 	# method = "LogisticRegression"
 	# method = "SVM_Linear"
 	# method = "SVM_RBF"
-	# method = "NN"
+	method = "NN"
 
 	result_X = result[[
 		"radius mean(mm)",
@@ -129,15 +129,16 @@ def main():
 
 	result_X_array = result_X.to_numpy()
 	# severity
-	# classes = [0,1,2]
-	# classnames = ["normal","moderate","severe"]
-	classes = [0,1]
-	classnames = ["normal","ICAD"]
+	classes = [0,1,2]
+	classnames = ["normal","moderate","severe"]
+	# classes = [0,1]
+	# classnames = ["normal","ICAD"]
 	n_classes = len(classes)
 
 	# stroke: [:,0], severity: [:,1], "icad": [:,2]
+	# result_Y_array = label_binarize(result_Y.to_numpy()[:,0],classes=classes)
 	result_Y_array = label_binarize(result_Y.to_numpy()[:,1],classes=classes)
-	result_Y_array = label_binarize(result_Y.to_numpy()[:,2],classes=classes)
+	# result_Y_array = label_binarize(result_Y.to_numpy()[:,2],classes=classes)
 
 	# model
 	model = Model(method=method)
