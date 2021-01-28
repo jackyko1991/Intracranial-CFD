@@ -28,10 +28,10 @@ def result_to_score(arr, doc, arr_name="", n_class=5, sort="asc", sigma=2.5, iqr
 		z = np.abs(stats.zscore(arr))
 		arr = arr[(z<sigma)]
 	elif outliers_method == "iqr":
-		Q1 = arr.quantile(0.25)
-		Q3 = arr.quantile(0.75)
+		Q1 = np.quantile(arr,0.25)
+		Q3 = np.quantile(arr,0.75)
 		IQR = Q3 - Q1
-		arr = arr[~((arr < (Q1 - 1.5 * IQR)) |(arr > (Q3 + 1.5 * IQR)))]
+		arr = arr[~((arr < (Q1 - iqr_factor * IQR)) |(arr > (Q3 + iqr_factor * IQR)))]
 
 	plt.clf()
 	n, bins, patches = plt.hist(x=arr, bins=n_class, color='#607c8e',
@@ -46,6 +46,25 @@ def result_to_score(arr, doc, arr_name="", n_class=5, sort="asc", sigma=2.5, iqr
 
 	print(n, bins, patches)
 
+	# convert result to score
+	score = np.zeros_like(arr)
+	if sort == "asc":
+		for i in range(n_class):
+			if i == 0:
+				score[arr<bins[1]] = 1
+			elif i == n_class -1:
+				score[arr>bins[n_class-1]] = n_class
+			else:
+				score[~((arr < bins[i]) |(arr > bins[i+1]))] = i+1
+	elif sort == "dsc":
+		for i in reversed(range(n_class)):
+			if i == 0:
+				score[arr>bins[n_class-1]] = 1
+			elif i == n_class -1:
+				score[arr<bins[1]] = n_class
+			else:
+				score[~((arr < bins[::-1][i+1]) |(arr > bins[::-1][i]))] = i+1
+
 	with doc.create(Figure(position='htbp')) as plot:
 		plot.add_plot(dpi=300)
 		plot.add_caption(arr_name)
@@ -54,15 +73,12 @@ def result_to_score(arr, doc, arr_name="", n_class=5, sort="asc", sigma=2.5, iqr
 		with centered.create(Tabular('c|ccccc')) as table:
 			table.add_row(['score']+[i + 1 for i in range(n_class)])
 			table.add_hline(1, n_class+1)
-			table.add_row(['range']+["{:.2f}-{:.2f}".format(bins[i],bins[i+1]) for i in range(n_class)])
+			table.add_row(['range']+["{:.2f}-{:.2f}".format(bins[i],bins[i+1]) for i in reversed(range(n_class))])
 			table.add_row(['count']+[value for value in n])
 			# table.add_hline(1, 2)
 			# table.add_row((4, 5, 6, 7))
 
-
 	doc.append(basic.NewPage())
-
-
 
 def main():
 	result_csv = "Z:/projects/intracranial/results.csv"
@@ -90,7 +106,8 @@ def main():
 	# plot distribution
 	with doc.create(Section('CFD results distribution plots')):
 		for (columnName, columnData) in result_X.iteritems():
-			result_to_score(columnData.values,doc,arr_name=columnName)
+			result_to_score(columnData.values,doc,arr_name=columnName,iqr_factor=1.5,outliers_method="iqr",sort="dsc")
+			break
 
 	print("Generating pdf...")
 	doc.generate_pdf(clean_tex=True)
