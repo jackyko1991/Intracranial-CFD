@@ -19,22 +19,22 @@ def result_to_score(arr, doc, arr_name="", n_class=5, sort="asc", sigma=2.5, iqr
 	:param float iqr_factor: factor for iqr outliers removal
 	:param str outliers_method: "z-score" or "iqr"
 	:type sigma: float
-	:return: None
+	:return: arr score: array of converted score
 	:rtype: None
 	'''
 
 	# remove outliners
 	if outliers_method == "z-score":
 		z = np.abs(stats.zscore(arr))
-		arr = arr[(z<sigma)]
+		arr_filtered = arr[(z<sigma)]
 	elif outliers_method == "iqr":
 		Q1 = np.quantile(arr,0.25)
 		Q3 = np.quantile(arr,0.75)
 		IQR = Q3 - Q1
-		arr = arr[~((arr < (Q1 - iqr_factor * IQR)) |(arr > (Q3 + iqr_factor * IQR)))]
+		arr_filtered = arr[~((arr < (Q1 - iqr_factor * IQR)) |(arr > (Q3 + iqr_factor * IQR)))]
 
 	plt.clf()
-	n, bins, patches = plt.hist(x=arr, bins=n_class, color='#607c8e',
+	n, bins, patches = plt.hist(x=arr_filtered, bins=n_class, color='#607c8e',
 		alpha=0.7, rwidth=0.9)
 	plt.grid(axis='y', alpha=0.75)
 	plt.xlabel('Value')
@@ -44,7 +44,7 @@ def result_to_score(arr, doc, arr_name="", n_class=5, sort="asc", sigma=2.5, iqr
 	# Set a clean upper y-axis limit.
 	plt.ylim(ymax=np.ceil(maxfreq / 10) * 10 if maxfreq % 10 else maxfreq + 10)
 
-	print(n, bins, patches)
+	# print(n, bins, patches)
 
 	# convert result to score
 	score = np.zeros_like(arr)
@@ -71,18 +71,20 @@ def result_to_score(arr, doc, arr_name="", n_class=5, sort="asc", sigma=2.5, iqr
 
 	with doc.create(Center()) as centered:
 		with centered.create(Tabular('c|ccccc')) as table:
-			table.add_row(['score']+[i + 1 for i in range(n_class)])
+			table.add_row(['severity score']+[i + 1 for i in range(n_class)])
 			table.add_hline(1, n_class+1)
 			table.add_row(['range']+["{:.2f}-{:.2f}".format(bins[i],bins[i+1]) for i in reversed(range(n_class))])
 			table.add_row(['count']+[value for value in n])
-			# table.add_hline(1, 2)
-			# table.add_row((4, 5, 6, 7))
 
 	doc.append(basic.NewPage())
+
+	return score
 
 def main():
 	result_csv = "Z:/projects/intracranial/results.csv"
 	# result_csv = "/Volumes/shared/projects/intracranial/results.csv"
+	score_csv = "Z:/projects/intracranial/scores.csv"
+
 	result = pd.read_csv(result_csv)
 
 	result_X = result[[
@@ -99,18 +101,59 @@ def main():
 		]]
 	result_Y = result[["Stroke","Severity","ICAD"]]
 
+	print(result_X.shape)
+
+	order = {
+		"radius mean(mm)": "dsc",
+		"radius min(mm)": "dsc",
+		"pressure mean(mmHg)": "asc",
+		"max pressure gradient(mmHg)": "asc",
+		"in/out pressure gradient(mmHg)": "asc",
+		"velocity mean(ms^-1)": "asc",
+		"peak velocity(ms^-1)": "asc",
+		"max velocity gradient(ms^-1)": "asc",
+		"vorticity mean(s^-1)": "asc",	
+		"peak vorticity(s^-1)": "asc"
+	}
+
 	# latex option
 	geometry_options = {"right": "2cm", "left": "2cm"}
 	doc = Document("cfd_result_score", geometry_options=geometry_options)
 
 	# plot distribution
+	scores = []
 	with doc.create(Section('CFD results distribution plots')):
 		for (columnName, columnData) in result_X.iteritems():
-			result_to_score(columnData.values,doc,arr_name=columnName,iqr_factor=1.5,outliers_method="iqr",sort="dsc")
-			break
+			scores.append(result_to_score(columnData.values,doc,arr_name=columnName,iqr_factor=1.5,outliers_method="iqr",sort=order[columnName]))
+
+	scores = np.stack(scores,axis=0).T
+	scores = np.c_[scores,np.expand_dims(np.sum(scores, axis=1),axis=-1),result_Y.to_numpy()]
+
+	print(scores.shape)
+
+	columnNames = [
+		"radius mean(mm)",
+		"radius min(mm)",
+		"pressure mean(mmHg)",
+		"max pressure gradient(mmHg)",
+		"in/out pressure gradient(mmHg)",
+		"velocity mean(ms^-1)",
+		"peak velocity(ms^-1)",
+		"max velocity gradient(ms^-1)",
+		"vorticity mean(s^-1)",	
+		"peak vorticity(s^-1)",
+		"sum",
+		"Stroke",
+		"Severity",
+		"ICAD"
+		]
+
+		
 
 	print("Generating pdf...")
 	doc.generate_pdf(clean_tex=True)
+
+
 
 if __name__ == "__main__":
 	main()
