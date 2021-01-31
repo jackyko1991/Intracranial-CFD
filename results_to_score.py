@@ -83,7 +83,7 @@ def result_to_score(arr, doc, arr_name="", n_class=5, sort="asc", sigma=2.5, iqr
 def main():
 	result_csv = "Z:/projects/intracranial/results.csv"
 	# result_csv = "/Volumes/shared/projects/intracranial/results.csv"
-	score_csv = "Z:/projects/intracranial/scores.csv"
+	scores_csv = "Z:/projects/intracranial/scores.csv"
 
 	result = pd.read_csv(result_csv)
 
@@ -100,8 +100,6 @@ def main():
 		"peak vorticity(s^-1)"
 		]]
 	result_Y = result[["Stroke","Severity","ICAD"]]
-
-	print(result_X.shape)
 
 	order = {
 		"radius mean(mm)": "dsc",
@@ -127,11 +125,10 @@ def main():
 			scores.append(result_to_score(columnData.values,doc,arr_name=columnName,iqr_factor=1.5,outliers_method="iqr",sort=order[columnName]))
 
 	scores = np.stack(scores,axis=0).T
-	scores = np.c_[scores,np.expand_dims(np.sum(scores, axis=1),axis=-1),result_Y.to_numpy()]
-
-	print(scores.shape)
+	scores = np.c_[result["patient"],scores,np.expand_dims(np.sum(scores, axis=1),axis=-1),result_Y.to_numpy()]
 
 	columnNames = [
+		"patient",
 		"radius mean(mm)",
 		"radius min(mm)",
 		"pressure mean(mmHg)",
@@ -148,12 +145,13 @@ def main():
 		"ICAD"
 		]
 
-		
+	scores_df = pd.DataFrame(data=scores, columns=columnNames)
+	print("Writing score output...")
+	scores_df.to_csv(scores_csv,index=False)
 
 	print("Generating pdf...")
 	doc.generate_pdf(clean_tex=True)
-
-
+	print("Generating pdf complete")
 
 if __name__ == "__main__":
 	main()

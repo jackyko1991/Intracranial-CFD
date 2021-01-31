@@ -42,7 +42,7 @@ class Model:
 		elif self.method == "LogisticRegression":
 			clf = LogisticRegression(random_state=0)
 		elif self.method == "NN":
-			clf = MLPClassifier(hidden_layer_sizes=(128, 64, 32),random_state=1, max_iter=1000)
+			clf = MLPClassifier(hidden_layer_sizes=(128, 64, 32),random_state=1, max_iter=100)
 
 		clf = OneVsRestClassifier(clf)
 		clf.fit(self.X_train, self.y_train)
@@ -103,7 +103,8 @@ class Model:
 		return
 
 def main():
-	result_csv = "Z:/projects/intracranial/results.csv"
+	# result_csv = "Z:/projects/intracranial/results.csv"
+	result_csv = "Z:/projects/intracranial/scores.csv"
 	# result_csv = "/Volumes/shared/projects/intracranial/results.csv"
 	result = pd.read_csv(result_csv)
 	# method = "RandomForest"
@@ -124,6 +125,9 @@ def main():
 		"vorticity mean(s^-1)",	
 		"peak vorticity(s^-1)"
 		]]
+	# result_X = result[[
+	# 	"sum"
+	# 	]]
 
 	result_Y = result[["Stroke","Severity","ICAD"]]
 
@@ -132,6 +136,7 @@ def main():
 	classes = [0,1,2]
 	classnames = ["normal","moderate","severe"]
 	# classes = [0,1]
+	# classnames = ["normal","Stroke"]
 	# classnames = ["normal","ICAD"]
 	n_classes = len(classes)
 
