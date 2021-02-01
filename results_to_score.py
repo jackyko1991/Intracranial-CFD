@@ -74,16 +74,16 @@ def result_to_score(arr, doc, arr_name="", n_class=5, sort="asc", sigma=2.5, iqr
 			table.add_row(['severity score']+[i + 1 for i in range(n_class)])
 			table.add_hline(1, n_class+1)
 			table.add_row(['range']+["{:.2f}-{:.2f}".format(bins[i],bins[i+1]) for i in reversed(range(n_class))])
-			table.add_row(['count']+[value for value in n])
+			table.add_row(['count']+[str(int(value)) for value in n])
 
 	doc.append(basic.NewPage())
 
 	return score
 
 def main():
-	result_csv = "Z:/projects/intracranial/results.csv"
+	result_csv = "Z:/data/intracranial/CFD_results/results.csv"
 	# result_csv = "/Volumes/shared/projects/intracranial/results.csv"
-	scores_csv = "Z:/projects/intracranial/scores.csv"
+	scores_csv = "Z:/data/intracranial/CFD_results/scores.csv"
 
 	result = pd.read_csv(result_csv)
 
@@ -116,7 +116,7 @@ def main():
 
 	# latex option
 	geometry_options = {"right": "2cm", "left": "2cm"}
-	doc = Document("cfd_result_score", geometry_options=geometry_options)
+	doc = Document("Z:/data/intracranial/CFD_results/cfd_result_score", geometry_options=geometry_options)
 
 	# plot distribution
 	scores = []
@@ -150,6 +150,7 @@ def main():
 	scores_df.to_csv(scores_csv,index=False)
 
 	print("Generating pdf...")
+	doc.generate_tex()
 	doc.generate_pdf(clean_tex=True)
 	print("Generating pdf complete")
 
