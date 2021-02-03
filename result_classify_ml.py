@@ -123,13 +123,21 @@ class Classify:
 
 		self.method = method
 		self.classnames = classnames
-		self.n_classes = len(self.classnames)
-		assert self.n_classes>0, "length of classnames should be > 0"
-
 		self.show_plot = show_plot
 		self.save_plot = save_plot
 		self.plot_dir = plot_dir
 		self.n_folds = n_folds
+
+	@property
+	def classnames(self):
+		return self.__classnames
+
+	@classnames.setter
+	def classnames(self, classnames):
+		self.n_classes = len(classnames)
+		assert self.n_classes>0, "length of classnames should be > 0"
+
+		self.__classnames = classnames
 
 	def run(self):
 		# model
@@ -139,15 +147,24 @@ class Classify:
 		kf = KFold(n_splits=self.n_folds,shuffle=True,random_state=0)
 
 		# plot
-		fig, axs = plt.subplots(2,self.n_classes,figsize=(5*self.n_classes, 10))
+		if self.n_classes < 3:
+			fig, axs = plt.subplots(1, self.n_classes,figsize=(5*self.n_classes, 5))
+		else:
+			fig, axs = plt.subplots(2,self.n_classes,figsize=(5*self.n_classes, 10))
 		fig.suptitle("ROC of Classifier: {}".format(self.method))
 
-		for i, ax in enumerate(axs.flatten()):
-			ax.plot([0, 1], [0, 1], linestyle='--', lw=2, color='r', alpha=.8)
-			if np.floor(i/self.n_classes) == 0:
-				ax.set(xlim=[-0.00, 1.0], ylim=[0.0, 1.05], xlabel='False Positive Rate', ylabel='True Positive Rate',title="{} ({})".format(self.classnames[i%self.n_classes],"Train"))
-			else:
-				ax.set(xlim=[-0.00, 1.0], ylim=[0.0, 1.05], xlabel='False Positive Rate', ylabel='True Positive Rate',title="{} ({})".format(self.classnames[i%self.n_classes],"Test"))
+		if self.n_classes < 3:
+			axs[0].plot([0, 1], [0, 1], linestyle='--', lw=2, color='r', alpha=.8)
+			axs[0].set(xlim=[-0.00, 1.0], ylim=[0.0, 1.05], xlabel='False Positive Rate', ylabel='True Positive Rate',title="Train")
+			axs[1].plot([0, 1], [0, 1], linestyle='--', lw=2, color='r', alpha=.8)
+			axs[1].set(xlim=[-0.00, 1.0], ylim=[0.0, 1.05], xlabel='False Positive Rate', ylabel='True Positive Rate',title="Test")
+		else:
+			for i, ax in enumerate(axs.flatten()):
+				ax.plot([0, 1], [0, 1], linestyle='--', lw=2, color='r', alpha=.8)
+				if np.floor(i/self.n_classes) == 0:
+					ax.set(xlim=[-0.00, 1.0], ylim=[0.0, 1.05], xlabel='False Positive Rate', ylabel='True Positive Rate',title="{} ({})".format(self.classnames[i%self.n_classes],"Train"))
+				else:
+					ax.set(xlim=[-0.00, 1.0], ylim=[0.0, 1.05], xlabel='False Positive Rate', ylabel='True Positive Rate',title="{} ({})".format(self.classnames[i%self.n_classes],"Test"))
 
 		tprs_train = []
 		fprs_train = []
@@ -158,15 +175,22 @@ class Classify:
 		mean_fpr = np.linspace(0, 1, 100)
 
 		columnNames = ["Method","Train/Test","Fold"]
-		for i in range(self.n_classes):
-			columnNames.append("AUC {}".format(str(i))) 
-		
+		if self.n_classes <3:
+			columnNames.append("AUC") 
+		else:
+			for i in range(self.n_classes):
+				columnNames.append("AUC {}".format(str(i))) 
+			
 		fold_aucs = {columnName: [] for columnName in columnNames}
 
 		columnNames = ["Method","Train/Test"]
-		for i in range(self.n_classes):
-			columnNames.append("AUC {}".format(str(i)))
-			columnNames.append("SD {}".format(str(i)))
+		if self.n_classes <3:
+			columnNames.append("AUC") 
+			columnNames.append("SD")
+		else: 
+			for i in range(self.n_classes):
+				columnNames.append("AUC {}".format(str(i)))
+				columnNames.append("SD {}".format(str(i)))
 		macro_aucs = {columnName: [] for columnName in columnNames}
 
 		for i, (train_index, test_index) in enumerate(kf.split(self.X)):
@@ -189,61 +213,42 @@ class Classify:
 			tpr_test = dict()
 			roc_auc_test = dict()
 
-			for j in range(self.n_classes):
-				# training
-				if "SVM" in self.method or "LogisticRegression" in self.method:
-					if self.n_classes >2:
+			if self.n_classes > 2:
+				for j in range(self.n_classes):
+					if "SVM" in self.method or "LogisticRegression" in self.method:
 						fpr_train[j], tpr_train[j], _ = roc_curve(y_train[:, j], clf.decision_function(X_train)[:,j])
-					else:
-						if j == 0:
-							fpr_train[j], tpr_train[j], _ = roc_curve(1 - y_train, 1- clf.decision_function(X_train))
-						else:
-							fpr_train[j], tpr_train[j], _ = roc_curve(y_train, clf.decision_function(X_train))
-				# elif "RandomForest" in method or "NN" in method:
-				else:
-					if self.n_classes >2:
-						fpr_train[j], tpr_train[j], _ = roc_curve(y_train[:, j], clf.predict_proba(X_train)[:,j])
-					else:
-						if j ==0:
-							fpr_train[j], tpr_train[j], _ = roc_curve(1 - y_train, clf.predict_proba(X_train)[:,j])
-						else:
-							fpr_train[j], tpr_train[j], _ = roc_curve(y_train, clf.predict_proba(X_train)[:,j])
-				# else:
-				# 	if n_classes > 2:
-				# 		fpr_train[j], tpr_train[j], _ = roc_curve(y_train[:, j], clf.predict(X_train)[:,j])					
-				# 	else:
-				# 		fpr_train[j], tpr_train[j], _ = roc_curve(y_train[:, j], label_binarize(clf.predict(X_train),classes=classes)[:,j])
-
-				roc_auc_train[j] = auc(fpr_train[j], tpr_train[j])
-				axs[0,j].plot(fpr_train[j],tpr_train[j], label="fold {} (AUC = {:.2f})".format(i, roc_auc_train[j]),alpha=0.3, lw=1)
-
-				# testing
-				if "SVM" in self.method or "LogisticRegression" in self.method:
-					if self.n_classes >2:
 						fpr_test[j], tpr_test[j], _ = roc_curve(y_test[:, j], clf.decision_function(X_test)[:,j])
 					else:
-						if j == 0:
-							fpr_test[j], tpr_test[j], _ = roc_curve(1 - y_test, 1-clf.decision_function(X_test))
-						else:
-							fpr_test[j], tpr_test[j], _ = roc_curve(y_test, clf.decision_function(X_test))
-				# elif "RandomForest" in method or "NN" in method:
-				else:
-					if self.n_classes >2:
+						fpr_train[j], tpr_train[j], _ = roc_curve(y_train[:, j], clf.predict_proba(X_train)[:,j])
 						fpr_test[j], tpr_test[j], _ = roc_curve(y_test[:, j], clf.predict_proba(X_test)[:,j])
+
+					# auc
+					roc_auc_train[j] = auc(fpr_train[j], tpr_train[j])
+					roc_auc_test[j] = auc(fpr_test[j], tpr_test[j])
+
+					# plot
+					axs[0,j].plot(fpr_train[j],tpr_train[j], label="fold {} (AUC = {:.2f})".format(i, roc_auc_train[j]),alpha=0.3, lw=1)
+					axs[1,j].plot(fpr_test[j],tpr_test[j], label="fold {} (AUC = {:.2f})".format(i, roc_auc_test[j]),alpha=0.3, lw=1)
+			else:
+				if "SVM" in self.method or "LogisticRegression" in self.method:
+					fpr_train, tpr_train, _ = roc_curve(y_train, clf.decision_function(X_train))
+					fpr_test, tpr_test, _ = roc_curve(y_test, clf.decision_function(X_test))
+				else:
+					if self.n_classes == 1:
+						fpr_train, tpr_train, _ = roc_curve(y_train, clf.predict_proba(X_train))
+						fpr_test, tpr_test, _ = roc_curve(y_test, clf.predict_proba(X_test))
 					else:
-						if j == 0:
-							fpr_test[j], tpr_test[j], _ = roc_curve(1 - y_test, clf.predict_proba(X_test)[:,j])
-						else:
-							fpr_test[j], tpr_test[j], _ = roc_curve(y_test, clf.predict_proba(X_test)[:,j])
-				# else:
-				# 	if n_classes >2:
-				# 		fpr_test[j], tpr_test[j], _ = roc_curve(y_test[:, j], clf.predict(X_test)[:,j])
-				# 	else:
-				# 		fpr_test[j], tpr_test[j], _ = roc_curve(y_test[:, j], label_binarize(clf.predict(X_test),classes=classes)[:,j])
+						fpr_train, tpr_train, _ = roc_curve(y_train, clf.predict_proba(X_train)[:,1])
+						fpr_test, tpr_test, _ = roc_curve(y_test, clf.predict_proba(X_test)[:,1])
 
-				roc_auc_test[j] = auc(fpr_test[j], tpr_test[j])
-				axs[1,j].plot(fpr_test[j],tpr_test[j], label="fold {} (AUC = {:.2f})".format(i, roc_auc_test[j]),alpha=0.3, lw=1)
+				# auc
+				roc_auc_train = auc(fpr_train, tpr_train)
+				roc_auc_test = auc(fpr_test, tpr_test)
 
+				# plot 
+				axs[0].plot(fpr_train,tpr_train, label="fold {} (AUC = {:.2f})".format(i, roc_auc_train),alpha=0.3, lw=1)
+				axs[1].plot(fpr_test,tpr_test, label="fold {} (AUC = {:.2f})".format(i, roc_auc_test),alpha=0.3, lw=1)
+				
 			tprs_train.append(tpr_train)
 			fprs_train.append(fpr_train)
 			aucs_train.append(roc_auc_train)
@@ -255,72 +260,129 @@ class Classify:
 			fold_aucs["Method"].append(self.method)
 			fold_aucs["Train/Test"].append("Train")
 			fold_aucs["Fold"].append(i + 1)
-			for j in range(self.n_classes):
-				fold_aucs["AUC {}".format(j)].append(roc_auc_train[j])
+
+			if self.n_classes <3:
+				fold_aucs["AUC"].append(roc_auc_train)
+			else:
+				for j in range(self.n_classes):
+					fold_aucs["AUC {}".format(j)].append(roc_auc_train[j])
 
 			fold_aucs["Method"].append(self.method)
 			fold_aucs["Train/Test"].append("Test")
 			fold_aucs["Fold"].append(i + 1)
-			for j in range(self.n_classes):
-				fold_aucs["AUC {}".format(j)].append(roc_auc_test[j])
+			if self.n_classes <3:
+				fold_aucs["AUC"].append(roc_auc_test)
+			else:
+				for j in range(self.n_classes):
+					fold_aucs["AUC {}".format(j)].append(roc_auc_test[j])
 
 		# average
 		mean_fpr = np.linspace(0,1,100)
 
-		macro_aucs["Method"].append(self.method)
-		macro_aucs["Train/Test"].append("Train")
-
-		for i in range(self.n_classes):
+		if self.n_classes <3:
 			# train
+			macro_aucs["Method"].append(self.method)
+			macro_aucs["Train/Test"].append("Train")
 			tprs = []
 			for tpr, fpr in zip(tprs_train,fprs_train):
-				interp_tpr = np.interp(mean_fpr, fpr[i], tpr[i])
+				interp_tpr = np.interp(mean_fpr, fpr, tpr)
 				tprs.append(interp_tpr)
 			mean_tpr = np.mean(tprs,axis=0)
 			mean_tpr[-1] = 1.0
 			mean_auc = metrics.auc(mean_fpr, mean_tpr)
-			aucs = [auc[i] for auc in aucs_train]
+			aucs = [auc for auc in aucs_train]
 			std_auc = np.std(aucs)
-			axs[0,i].plot(mean_fpr, mean_tpr, color='b',
+			axs[0].plot(mean_fpr, mean_tpr, color='b',
 				label='Mean ROC (AUC = {:.2f} $\pm$ {:.2f})'.format(mean_auc, std_auc),
 				lw=2, alpha=.8)
 
 			std_tpr = np.std(tprs, axis=0)
 			tprs_upper = np.minimum(mean_tpr + std_tpr, 1)
 			tprs_lower = np.maximum(mean_tpr - std_tpr, 0)
-			axs[0,i].fill_between(mean_fpr, tprs_lower, tprs_upper, color='grey', alpha=.2,
+			axs[0].fill_between(mean_fpr, tprs_lower, tprs_upper, color='grey', alpha=.2,
 				label=r'$\pm$ 1 std. dev.')
 
-			macro_aucs["AUC {}".format(str(i))].append(mean_auc)
-			macro_aucs["SD {}".format(str(i))].append(std_auc)
+			macro_aucs["AUC"].append(mean_auc)
+			macro_aucs["SD"].append(std_auc)
 
-		macro_aucs["Method"].append(self.method)
-		macro_aucs["Train/Test"].append("Test")
-
-		for i in range(self.n_classes):
 			# test
+			macro_aucs["Method"].append(self.method)
+			macro_aucs["Train/Test"].append("Test")
 			tprs = []
 			for tpr, fpr in zip(tprs_test,fprs_test):
-				interp_tpr = np.interp(mean_fpr, fpr[i], tpr[i])
+				interp_tpr = np.interp(mean_fpr, fpr, tpr)
 				tprs.append(interp_tpr)
 			mean_tpr = np.mean(tprs,axis=0)
-			mean_tpr[0] = 0.0
 			mean_tpr[-1] = 1.0
 			mean_auc = metrics.auc(mean_fpr, mean_tpr)
-			aucs = [auc[i] for auc in aucs_test]
+			aucs = [auc for auc in aucs_test]
 			std_auc = np.std(aucs)
-			axs[1,i].plot(mean_fpr, mean_tpr, color='b',
+			axs[1].plot(mean_fpr, mean_tpr, color='b',
 				label='Mean ROC (AUC = {:.2f} $\pm$ {:.2f})'.format(mean_auc, std_auc),
 				lw=2, alpha=.8)
 
 			std_tpr = np.std(tprs, axis=0)
 			tprs_upper = np.minimum(mean_tpr + std_tpr, 1)
 			tprs_lower = np.maximum(mean_tpr - std_tpr, 0)
-			axs[1,i].fill_between(mean_fpr, tprs_lower, tprs_upper, color='grey', alpha=.2,
+			axs[1].fill_between(mean_fpr, tprs_lower, tprs_upper, color='grey', alpha=.2,
 				label=r'$\pm$ 1 std. dev.')
 
-			macro_aucs["AUC {}".format(str(i))].append(mean_auc)
-			macro_aucs["SD {}".format(str(i))].append(std_auc)
+			macro_aucs["AUC"].append(mean_auc)
+			macro_aucs["SD"].append(std_auc)
+		else:
+			# train
+			macro_aucs["Method"].append(self.method)
+			macro_aucs["Train/Test"].append("Train")
+			for i in range(self.n_classes):
+				tprs = []
+				for tpr, fpr in zip(tprs_train,fprs_train):
+					interp_tpr = np.interp(mean_fpr, fpr[i], tpr[i])
+					tprs.append(interp_tpr)
+				mean_tpr = np.mean(tprs,axis=0)
+				mean_tpr[-1] = 1.0
+				mean_auc = metrics.auc(mean_fpr, mean_tpr)
+				aucs = [auc[i] for auc in aucs_train]
+				std_auc = np.std(aucs)
+				axs[0,i].plot(mean_fpr, mean_tpr, color='b',
+					label='Mean ROC (AUC = {:.2f} $\pm$ {:.2f})'.format(mean_auc, std_auc),
+					lw=2, alpha=.8)
+
+				std_tpr = np.std(tprs, axis=0)
+				tprs_upper = np.minimum(mean_tpr + std_tpr, 1)
+				tprs_lower = np.maximum(mean_tpr - std_tpr, 0)
+				axs[0,i].fill_between(mean_fpr, tprs_lower, tprs_upper, color='grey', alpha=.2,
+					label=r'$\pm$ 1 std. dev.')
+
+				macro_aucs["AUC {}".format(str(i))].append(mean_auc)
+				macro_aucs["SD {}".format(str(i))].append(std_auc)
+
+			# test
+			macro_aucs["Method"].append(self.method)
+			macro_aucs["Train/Test"].append("Test")
+
+			for i in range(self.n_classes):
+				tprs = []
+				for tpr, fpr in zip(tprs_test,fprs_test):
+					interp_tpr = np.interp(mean_fpr, fpr[i], tpr[i])
+					tprs.append(interp_tpr)
+				mean_tpr = np.mean(tprs,axis=0)
+				mean_tpr[0] = 0.0
+				mean_tpr[-1] = 1.0
+				mean_auc = metrics.auc(mean_fpr, mean_tpr)
+				aucs = [auc[i] for auc in aucs_test]
+				std_auc = np.std(aucs)
+				axs[1,i].plot(mean_fpr, mean_tpr, color='b',
+					label='Mean ROC (AUC = {:.2f} $\pm$ {:.2f})'.format(mean_auc, std_auc),
+					lw=2, alpha=.8)
+
+				std_tpr = np.std(tprs, axis=0)
+				tprs_upper = np.minimum(mean_tpr + std_tpr, 1)
+				tprs_lower = np.maximum(mean_tpr - std_tpr, 0)
+				axs[1,i].fill_between(mean_fpr, tprs_lower, tprs_upper, color='grey', alpha=.2,
+					label=r'$\pm$ 1 std. dev.')
+
+				macro_aucs["AUC {}".format(str(i))].append(mean_auc)
+				macro_aucs["SD {}".format(str(i))].append(std_auc)
 
 		for i, ax in enumerate(axs.flatten()):
 			ax.legend(loc="lower right")
@@ -336,12 +398,16 @@ class Classify:
 		return fold_aucs, macro_aucs
 
 def main():
-	# result_csv = "Z:/projects/intracranial/results.csv"
-	result_csv = "Z:/data/intracranial/CFD_results/scores.csv"
-	# result_csv = "/Volumes/shared/projects/intracranial/results.csv"
-	plot_output_dir = "Z:/data/intracranial/CFD_results/plots/scores_sum"
-	kfold_output_csv = "Z:/data/intracranial/CFD_results/auc/scores_sum_kfold_aucs.csv"
-	macro_output_csv = "Z:/data/intracranial/CFD_results/auc/scores_sum_macro_aucs.csv"
+	result_csv = "Z:/projects/intracranial/results.csv"
+	plot_output_dir = "Z:/projects/intracranial/plots/results_radius_min"
+	kfold_output_csv = "Z:/projects/intracranial/auc/results_radius_min_kfold_aucs.csv"
+	macro_output_csv = "Z:/projects/intracranial/auc/results_radius_min_macro_aucs.csv"
+
+	# result_csv = "Z:/data/intracranial/CFD_results/scores.csv"
+	# # result_csv = "/Volumes/shared/projects/intracranial/results.csv"
+	# plot_output_dir = "Z:/data/intracranial/CFD_results/plots/scores_sum"
+	# kfold_output_csv = "Z:/data/intracranial/CFD_results/auc/scores_sum_kfold_aucs.csv"
+	# macro_output_csv = "Z:/data/intracranial/CFD_results/auc/scores_sum_macro_aucs.csv"
 	result = pd.read_csv(result_csv)
 
 	show_plot = False
@@ -350,7 +416,7 @@ def main():
 	methods = [
 		"RandomForest",
 		"LogisticRegression",
-		"SVM_Linear",
+		# "SVM_Linear",
 		"SVM_RBF",
 		"MLP"
 	]
@@ -367,40 +433,71 @@ def main():
 	# 	"vorticity mean(s^-1)",	
 	# 	"peak vorticity(s^-1)"
 	# 	]]
+
+	# # selected by anova
+	# result_X = result[[
+	# 	"radius mean(mm)",
+	# 	# "radius min(mm)",
+	# 	# "pressure mean(mmHg)",
+	# 	# "max pressure gradient(mmHg)",
+	# 	# "in/out pressure gradient(mmHg)",
+	# 	"velocity mean(ms^-1)",
+	# 	"peak velocity(ms^-1)",
+	# 	# "max velocity gradient(ms^-1)",
+	# 	"vorticity mean(s^-1)",	
+	# 	"peak vorticity(s^-1)"
+	# 	]]
+
+	# select by human
+	# result_X = result[[
+	# 	"radius min(mm)",
+	# 	"in/out pressure gradient(mmHg)",
+	# 	"peak velocity(ms^-1)",
+	# 	"peak vorticity(s^-1)"
+	# 	]]
+
 	result_X = result[[
-		"sum"
+		"radius min(mm)",
 		]]
 
 	result_Y = result[["Stroke","Severity","ICAD"]]
 
 	result_X_array = result_X.to_numpy()
 	# severity
-	classes = [0,1,2]
-	classnames = ["normal","moderate","severe"]
-	# classes = [0,1]
-	# classnames = ["normal","Stroke"]
+	# classes = [0,1,2]
+	# classnames = ["normal","moderate","severe"]
+	classes = [0,1]
+	classnames = ["normal","Stroke"]
 	# classnames = ["normal","ICAD"]
 
 	# stroke: [:,0], severity: [:,1], "icad": [:,2]
-	# result_Y_array = label_binarize(result_Y.to_numpy()[:,0],classes=classes)
-	result_Y_array = label_binarize(result_Y.to_numpy()[:,1],classes=classes)
+	result_Y_array = label_binarize(result_Y.to_numpy()[:,0],classes=classes)
+	# result_Y_array = label_binarize(result_Y.to_numpy()[:,1],classes=classes)
 	# result_Y_array = label_binarize(result_Y.to_numpy()[:,2],classes=classes)
 
 	classify = Classify(result_X_array,result_Y_array,classnames=classnames)
 	classify.mlp_iter = mlp_iter
 	classify.plot_dir = plot_output_dir
+	classify.show_plot = show_plot
 
 	# output df
 	columnNames = ["Method","Train/Test","Fold"]
-	for i in range(len(classes)):
-		columnNames.append("AUC {}".format(str(i))) 
+	if len(classes) <3:
+		columnNames.append("AUC") 
+	else:
+		for i in range(len(classes)):
+			columnNames.append("AUC {}".format(str(i))) 
 
 	fold_aucs_df = pd.DataFrame(columns=columnNames)
 
 	columnNames = ["Method","Train/Test"]
-	for i in range(len(classes)):
-		columnNames.append("AUC {}".format(str(i)))
-		columnNames.append("SD {}".format(str(i)))
+	if len(classes) <3:
+		columnNames.append("AUC")
+		columnNames.append("SD")
+	else:
+		for i in range(len(classes)):
+			columnNames.append("AUC {}".format(str(i)))
+			columnNames.append("SD {}".format(str(i)))
 
 	macro_aucs_df = pd.DataFrame(columns=columnNames)
 
@@ -417,7 +514,12 @@ def main():
 
 	# write csv
 	tqdm.write("Writing output CSV...")
+	if not os.path.exists(os.path.dirname(kfold_output_csv)):
+		os.makedirs(os.path.dirname(kfold_output_csv))
 	fold_aucs_df.to_csv(kfold_output_csv,index=False)
+
+	if not os.path.exists(os.path.dirname(macro_output_csv)):
+		os.makedirs(os.path.dirname(macro_output_csv))
 	macro_aucs_df.to_csv(macro_output_csv,index=False)
 	tqdm.write("Write output CSV complete")
 
