@@ -40,11 +40,11 @@ class Model:
 		if self.method == "RandomForest":
 			clf = RandomForestClassifier(max_depth=3, random_state=0)
 		elif self.method == "SVM_Linear":
-			clf = svm.SVC(kernel='linear')
+			clf = svm.SVC(kernel='linear',probability=True)
 		elif self.method == "SVM_RBF":
-			clf = svm.SVC(kernel='rbf')
+			clf = svm.SVC(kernel='rbf',probability=True)
 		elif self.method == "LogisticRegression":
-			clf = LogisticRegression(random_state=0)
+			clf = LogisticRegression(random_state=0, multi_class='multinomial')
 		elif self.method == "NN" or self.method == "MLP":
 			clf = MLPClassifier(hidden_layer_sizes=(128, 64, 32),random_state=1, max_iter=self.mlp_iter)
 
@@ -127,6 +127,7 @@ class Classify:
 		self.save_plot = save_plot
 		self.plot_dir = plot_dir
 		self.n_folds = n_folds
+		self.prob = {}
 
 	@property
 	def classnames(self):
@@ -215,7 +216,8 @@ class Classify:
 
 			if self.n_classes > 2:
 				for j in range(self.n_classes):
-					if "SVM" in self.method or "LogisticRegression" in self.method:
+					if False:
+					# if "SVM" in self.method or "LogisticRegression" in self.method:
 						fpr_train[j], tpr_train[j], _ = roc_curve(y_train[:, j], clf.decision_function(X_train)[:,j])
 						fpr_test[j], tpr_test[j], _ = roc_curve(y_test[:, j], clf.decision_function(X_test)[:,j])
 					else:
@@ -229,17 +231,27 @@ class Classify:
 					# plot
 					axs[0,j].plot(fpr_train[j],tpr_train[j], label="fold {} (AUC = {:.2f})".format(i, roc_auc_train[j]),alpha=0.3, lw=1)
 					axs[1,j].plot(fpr_test[j],tpr_test[j], label="fold {} (AUC = {:.2f})".format(i, roc_auc_test[j]),alpha=0.3, lw=1)
+
+					# output probability
+					prob = clf.predict_proba(self.X)
 			else:
-				if "SVM" in self.method or "LogisticRegression" in self.method:
+				if False:
+				# if "SVM" in self.method or "LogisticRegression" in self.method:
 					fpr_train, tpr_train, _ = roc_curve(y_train, clf.decision_function(X_train))
 					fpr_test, tpr_test, _ = roc_curve(y_test, clf.decision_function(X_test))
+
+					prob = clf.decision_function(self.X)
 				else:
 					if self.n_classes == 1:
 						fpr_train, tpr_train, _ = roc_curve(y_train, clf.predict_proba(X_train))
 						fpr_test, tpr_test, _ = roc_curve(y_test, clf.predict_proba(X_test))
+
+						prob = clf.predict_proba(self.X)
 					else:
 						fpr_train, tpr_train, _ = roc_curve(y_train, clf.predict_proba(X_train)[:,1])
 						fpr_test, tpr_test, _ = roc_curve(y_test, clf.predict_proba(X_test)[:,1])
+
+						prob = clf.predict_proba(self.X)[:,1]
 
 				# auc
 				roc_auc_train = auc(fpr_train, tpr_train)
@@ -248,6 +260,8 @@ class Classify:
 				# plot 
 				axs[0].plot(fpr_train,tpr_train, label="fold {} (AUC = {:.2f})".format(i, roc_auc_train),alpha=0.3, lw=1)
 				axs[1].plot(fpr_test,tpr_test, label="fold {} (AUC = {:.2f})".format(i, roc_auc_test),alpha=0.3, lw=1)
+
+			self.prob["fold_{}".format(i)] = prob
 				
 			tprs_train.append(tpr_train)
 			fprs_train.append(fpr_train)
@@ -395,13 +409,19 @@ class Classify:
 		if self.show_plot:
 			plt.show()
 
+		prob_avg = np.zeros_like(self.prob["fold_0"])
+		for key, value in self.prob.items():
+			prob_avg += value
+		self.prob["fold_avg"] = prob_avg/self.n_folds
+
 		return fold_aucs, macro_aucs
 
 def main():
 	result_csv = "Z:/projects/intracranial/results.csv"
-	plot_output_dir = "Z:/projects/intracranial/plots/results_radius_min"
-	kfold_output_csv = "Z:/projects/intracranial/auc/results_radius_min_kfold_aucs.csv"
-	macro_output_csv = "Z:/projects/intracranial/auc/results_radius_min_macro_aucs.csv"
+	plot_output_dir = "Z:/projects/intracranial/plots/results_selected"
+	kfold_output_csv = "Z:/projects/intracranial/auc/results_selected_kfold_aucs.csv"
+	macro_output_csv = "Z:/projects/intracranial/auc/results_selected_macro_aucs.csv"
+	probability_output_csv = "Z:/projects/intracranial/results_with_probability_selected.csv"
 
 	# result_csv = "Z:/data/intracranial/CFD_results/scores.csv"
 	# # result_csv = "/Volumes/shared/projects/intracranial/results.csv"
@@ -449,16 +469,16 @@ def main():
 	# 	]]
 
 	# select by human
-	# result_X = result[[
-	# 	"radius min(mm)",
-	# 	"in/out pressure gradient(mmHg)",
-	# 	"peak velocity(ms^-1)",
-	# 	"peak vorticity(s^-1)"
-	# 	]]
-
 	result_X = result[[
 		"radius min(mm)",
+		"in/out pressure gradient(mmHg)",
+		"peak velocity(ms^-1)",
+		"peak vorticity(s^-1)"
 		]]
+
+	# result_X = result[[
+	# 	"radius min(mm)",
+	# 	]]
 
 	result_Y = result[["Stroke","Severity","ICAD"]]
 
@@ -508,6 +528,12 @@ def main():
 		classify.method = method
 		classify.save_plot = True
 		fold_aucs, macro_aucs = classify.run()
+		print(classify.prob['fold_avg'].shape)
+
+		if len(classes) < 3:
+			result['probability_{}'.format(method)] = classify.prob['fold_avg']
+		else:
+			exit("probability output not ready for class number > 3")
 
 		fold_aucs_df = fold_aucs_df.append(pd.DataFrame.from_dict(fold_aucs), ignore_index=True)
 		macro_aucs_df = macro_aucs_df.append(pd.DataFrame.from_dict(macro_aucs), ignore_index=True)
@@ -521,6 +547,11 @@ def main():
 	if not os.path.exists(os.path.dirname(macro_output_csv)):
 		os.makedirs(os.path.dirname(macro_output_csv))
 	macro_aucs_df.to_csv(macro_output_csv,index=False)
+
+	if not os.path.exists(os.path.dirname(probability_output_csv)):
+		os.makedirs(os.path.dirname(probability_output_csv))
+	result.to_csv(probability_output_csv,index=False)
+
 	tqdm.write("Write output CSV complete")
 
 if __name__ == "__main__":
