@@ -417,11 +417,11 @@ class Classify:
 		return fold_aucs, macro_aucs
 
 def main():
-	result_csv = "Z:/projects/intracranial/results.csv"
-	plot_output_dir = "Z:/projects/intracranial/plots/results_selected"
-	kfold_output_csv = "Z:/projects/intracranial/auc/results_selected_kfold_aucs.csv"
-	macro_output_csv = "Z:/projects/intracranial/auc/results_selected_macro_aucs.csv"
-	probability_output_csv = "Z:/projects/intracranial/results_with_probability_selected.csv"
+	result_csv = "Z:/data/intracranial/CFD_results/results.csv"
+	plot_output_dir = "Z:/data/intracranial/CFD_results/plots/results_all"
+	kfold_output_csv = "Z:/data/intracranial/CFD_results/auc/results_all_kfold_aucs.csv"
+	macro_output_csv = "Z:/data/intracranial/CFD_results/auc/results_all_macro_aucs.csv"
+	probability_output_csv = "Z:/data/intracranial/CFD_results/results_with_probability_all.csv"
 
 	# result_csv = "Z:/data/intracranial/CFD_results/scores.csv"
 	# # result_csv = "/Volumes/shared/projects/intracranial/results.csv"
@@ -441,18 +441,18 @@ def main():
 		"MLP"
 	]
 
-	# result_X = result[[
-	# 	"radius mean(mm)",
-	# 	"radius min(mm)",
-	# 	"pressure mean(mmHg)",
-	# 	"max pressure gradient(mmHg)",
-	# 	"in/out pressure gradient(mmHg)",
-	# 	"velocity mean(ms^-1)",
-	# 	"peak velocity(ms^-1)",
-	# 	"max velocity gradient(ms^-1)",
-	# 	"vorticity mean(s^-1)",	
-	# 	"peak vorticity(s^-1)"
-	# 	]]
+	result_X = result[[
+		"radius mean(mm)",
+		"radius min(mm)",
+		"pressure mean(mmHg)",
+		"max pressure gradient(mmHg)",
+		"in/out pressure gradient(mmHg)",
+		"velocity mean(ms^-1)",
+		"peak velocity(ms^-1)",
+		"max velocity gradient(ms^-1)",
+		"vorticity mean(s^-1)",	
+		"peak vorticity(s^-1)"
+		]]
 
 	# # selected by anova
 	# result_X = result[[
@@ -468,19 +468,19 @@ def main():
 	# 	"peak vorticity(s^-1)"
 	# 	]]
 
-	# select by human
-	result_X = result[[
-		"radius min(mm)",
-		"in/out pressure gradient(mmHg)",
-		"peak velocity(ms^-1)",
-		"peak vorticity(s^-1)"
-		]]
-
+	# # select by human
 	# result_X = result[[
-	# 	"radius min(mm)",
+	# 	"degree of stenosis(%)",
+	# 	"in/out pressure gradient(mmHg)",
+	# 	"peak velocity(ms^-1)",
+	# 	"peak vorticity(s^-1)"
 	# 	]]
 
-	result_Y = result[["Stroke","Severity","ICAD"]]
+	# result_X = result[[
+	# 	"degree of stenosis(%)",
+	# 	]]
+
+	result_Y = result[["Stroke","Severity","ICAD", "Stroke in 1 year"]]
 
 	result_X_array = result_X.to_numpy()
 	# severity
@@ -528,7 +528,6 @@ def main():
 		classify.method = method
 		classify.save_plot = True
 		fold_aucs, macro_aucs = classify.run()
-		print(classify.prob['fold_avg'].shape)
 
 		if len(classes) < 3:
 			result['probability_{}'.format(method)] = classify.prob['fold_avg']

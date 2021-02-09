@@ -649,14 +649,14 @@ def moving_variance_matrix(centerline,fields, windows, minPoint=(0,0,0), bifurca
 
 def probe_min_max_point(centerline_filename, surface_filename, minPoint=(0,0,0), maxPoint=(0,0,0)):
 	centerlineReader = vtk.vtkXMLPolyDataReader()
-	centerlineReader.SetFileName(centerline)
+	centerlineReader.SetFileName(centerline_filename)
 	centerlineReader.Update()
 	centerline = centerlineReader.GetOutput()
 	centerline.GetCellData().SetScalars(centerline.GetCellData().GetArray(2));
-	centerline.GetPointData().SetScalars(centerline.GetPointData().GetArray("Abscissas"));
+	centerline.GetPointData().SetScalars(centerline.GetPointData().GetArray("Radius"));
 
 	surfaceReader = vtk.vtkSTLReader()
-	surfaceReader.SetFileName(surface)
+	surfaceReader.SetFileName(surface_filename)
 	surfaceReader.Update()
 	surface = surfaceReader.GetOutput()
 
@@ -680,7 +680,7 @@ def probe_min_max_point(centerline_filename, surface_filename, minPoint=(0,0,0),
 
 	scalarBar = vtk.vtkScalarBarActor()
 	scalarBar.SetLookupTable(centerlineMapper.GetLookupTable());
-	scalarBar.SetTitle("Abscissas");
+	scalarBar.SetTitle("Radius");
 	scalarBar.SetNumberOfLabels(4);
 	scalarBar.SetWidth(0.08)
 	scalarBar.SetHeight(0.6)
@@ -728,10 +728,10 @@ def probe_min_max_point(centerline_filename, surface_filename, minPoint=(0,0,0),
 	maxSource.SetCenter(closestPoint)
 	maxSource.SetRadius(0.3);
 	maxMapper = vtk.vtkPolyDataMapper()
-	maxMapper.SetInputConnection(minSource.GetOutputPort());
+	maxMapper.SetInputConnection(maxSource.GetOutputPort());
 	maxActor = vtk.vtkActor()
 	maxActor.SetMapper(maxMapper);
-	maxActor.GetProperty().SetColor((1.0,0.0,0.0))
+	maxActor.GetProperty().SetColor((0.0,1.0,0.0))
 
 	centerlineActor = vtk.vtkActor()
 	centerlineActor.SetMapper(centerlineMapper)
@@ -788,11 +788,11 @@ def probe_min_max_point(centerline_filename, surface_filename, minPoint=(0,0,0),
 	maxRadius = centerline.GetPointData().GetArray("Radius").GetTuple(maxIdx)[0]
 	DoS = (1-minRadius/maxRadius)*100
 
-	print("{}: min radius = {} mm, Degree of stenosis = {} %".format(timePoint,minRadius,DoS))
+	tqdm.write("min radius = {}\nmax radius = {} mm\nDegree of stenosis = {} %".format(minRadius,maxRadius,DoS))
 
 	return DoS, minPoint, maxPoint
 
-def result_analysis(case_dir, minPoint=(0,0,0), maxPoint=(0,0,0), probe=False):
+def result_analysis(case_dir, minPoint=(0,0,0), maxPoint=(0,0,0), probe=False, perform_fit=False):
 	# load domain json file
 	with open(os.path.join(case_dir,"domain.json")) as f:
 		domain = json.load(f)
@@ -802,73 +802,63 @@ def result_analysis(case_dir, minPoint=(0,0,0), maxPoint=(0,0,0), probe=False):
 	output_dir = os.path.join(case_dir,"CFD_OpenFOAM_result")
 
 	if probe:
-		Dos, minPoint, maxPoint = probe_min_max_point(centerline,surface,minPoint,maxPoint)
+		try:
+			assert domain["fiducial_0"]["type"] == "Stenosis", "\"fiducial_0\" is not Stenosis"
+			minPoint = tuple(domain["fiducial_0"]["coordinate"])
+		except:
+			minPoint = (0,0,0)
 
-	# load last 5 time points and take average
-	results_vtk = []
+		try:
+			assert domain["fiducial_1"]["type"] == "DoS_Ref", "\"fiducial_1\" is not DoS_Ref"
+			maxPoint = tuple(domain["fiducial_1"]["coordinate"])
+		except:
+			maxPoint = (0,0,0)
 
-	for time in range(0,2001,100):
-		results_vtk.append(os.path.join(case_dir,"CFD_OpenFOAM", "VTK","OpenFOAM_" + str(time)+".vtk"))
-	
-	try:
-		minPoint = tuple(domain["fiducial_0"]["coordinate"])
-	except:
-		minPoint = (0,0,0)
+		DoS, minPoint, maxPoint = probe_min_max_point(centerline,surface,minPoint,maxPoint)
 
-	return_value, mv_matrix_df, mv_dy_matrix_df = centerline_probe_result(
-		os.path.join(case_dir,domain["centerline"]["filename"]),
-		results_vtk[-5:],
-		output_dir, 
-		minPoint=minPoint,
-		bifurcationPoint=domain["bifurcation_point"]["coordinate"]
-		)
+		if minPoint != (0,0,0):
+			domain["fiducial_0"] = {"coordinate": minPoint, "type": "Stenosis"}
 
-	return return_value, mv_matrix_df, mv_dy_matrix_df, minPoint, maxPoint
-	
+		if maxPoint != (0,0,0):
+			domain["fiducial_1"] = {"coordinate": maxPoint, "type": "DoS_Ref"}
+
+		with open(os.path.join(case_dir,"domain.json"), 'w') as f:
+			json.dump(domain, f)
+	else:
+		DoS = 0
+
+	return_value = {}
+
+	if perform_fit:
+		# load last 5 time points and take average
+		results_vtk = []
+
+		for time in range(0,2001,100):
+			results_vtk.append(os.path.join(case_dir,"CFD_OpenFOAM", "VTK","OpenFOAM_" + str(time)+".vtk"))
+		
+		return_value_, mv_matrix_df, mv_dy_matrix_df = centerline_probe_result(
+			os.path.join(case_dir,domain["centerline"]["filename"]),
+			results_vtk[-5:],
+			output_dir, 
+			minPoint=minPoint,
+			bifurcationPoint=domain["bifurcation_point"]["coordinate"]
+			)
+
+		return_value.update(return_value_)
+
+	return_value['degree of stenosis(%)'] = DoS
+
+	if perform_fit:
+		return return_value, mv_matrix_df, mv_dy_matrix_df, minPoint, maxPoint
+	else:
+		return return_value, minPoint, maxPoint
+
 def main():
-	group = "stent"
-	probe = False
+	probe=True
+	perform_fit = False
 
-	output_file = "/mnt/DIIR-JK-NAS/data/intracranial/followup/result-{}.csv".format(group,group)
-	data_folder = "/mnt/DIIR-JK-NAS/data/intracranial/followup/{}".format(group)
-
-	# create result dataframe
-	field_names = ['patient','group','time point',
-		'radius mean(mm)','degree of stenosis(%)','radius min(mm)',
-		'pressure mean(mmHg)','max pressure gradient(mmHg)','in/out pressure gradient(mmHg)',
-		'velocity mean(ms^-1)','peak velocity(ms^-1)',
-		'shear strain rate mean(Pas^-1)','peak shear strain rate(Pas^-1)',
-		'vorticity mean(s^-1)','peak vorticity(s^-1)']
-
-	result_df = pd.DataFrame(columns=field_names)
-	# timePoints = ['baseline','baseline-post','12months','followup']
-	# timePoints = ["baseline"]
-
-	pbar = tqdm(os.listdir(data_folder))
-	# pbar = tqdm(["ChowLM"])
-	for case in pbar:
-		pbar.set_description(case)
-		minPoint = (0,0,0)
-		maxPoint = (0,0,0)
-
-		pbar2 = tqdm(timePoints)
-		for timePoint in pbar2:
-			if not os.path.exists(os.path.join(data_folder,case,timePoint)):
-				continue
-			pbar2.set_description(timePoint)
-
-			row = {"patient": case, "group": group, "time point": timePoint}
-			result, result_dy, minPoint, maxPoint = result_analysis(os.path.join(data_folder,case,timePoint),minPoint=minPoint,maxPoint=maxPoint,probe=probe)
-			row.update(result)
-			result_df = result_df.append(pd.Series(row),ignore_index=True)
-	result_df.to_csv(output_file,index=False)
-
-def main2():
-	probe=False
-	group="stenosis"
-
-	output_file = "/mnt/DIIR-JK-NAS/data/intracranial/CFD_results/result_089.csv"
-	data_folder = "/mnt/DIIR-JK-NAS/data/intracranial/data_ESASIS_followup/stent"
+	# output_file = "/mnt/DIIR-JK-NAS/data/intracranial/CFD_results/result_089.csv"
+	# data_folder = "/mnt/DIIR-JK-NAS/data/intracranial/data_ESASIS_followup/stent"
 
 	# output_file = "Z:/data/intracranial/data_30_30/result_EASIS_medical.csv"
 	# data_folder = "Z:/data/intracranial/data_30_30/stenosis/ESASIS_medical"
@@ -876,11 +866,11 @@ def main2():
 	# output_file = "Z:/data/intracranial/data_30_30/result_EASIS_stent.csv"
 	# data_folder = "Z:/data/intracranial/data_30_30/stenosis/ESASIS_stent"
 
-	output_file = "Z:/data/intracranial/data_30_30/result_surgery.csv"
-	data_folder = "Z:/data/intracranial/data_30_30/surgery"
+	output_file = "Z:/data/intracranial/CFD_results/result_medical.csv"
+	data_folder = "Z:/data/intracranial/data_ESASIS_followup/medical"
 
 	# create result dataframe
-	field_names = ['patient','group','stage',
+	field_names = ['patient','stage',
 		'radius mean(mm)','degree of stenosis(%)','radius min(mm)',
 		'pressure mean(mmHg)','max pressure gradient(mmHg)','in/out pressure gradient(mmHg)',
 		'velocity mean(ms^-1)','peak velocity(ms^-1)','max velocity gradient(ms^-1)',
@@ -888,8 +878,11 @@ def main2():
 
 	result_df = pd.DataFrame(columns=field_names)
 
-	# pbar = tqdm(os.listdir(data_folder))
-	pbar = tqdm(["089"])
+	pbar = tqdm(os.listdir(data_folder))
+	pbar = tqdm([
+		"038",
+		# "050"
+		])
 
 	ignore_case = [
 		"ChanSiuYung",
@@ -897,12 +890,13 @@ def main2():
 		"ChanMeiLing"
 	]
 
+	stages = ["baseline"]
+
 	for case in pbar:
 		pbar.set_description(case)
 		minPoint = (0,0,0)
 		maxPoint = (0,0,0)
 
-		
 		working_dir = os.path.join(data_folder,case,"baseline")
 
 		if not os.path.exists(working_dir) or not os.path.exists(os.path.join(working_dir,"domain.json")):
@@ -911,17 +905,21 @@ def main2():
 		if case in ignore_case:
 			continue
 
-		row = {"patient": case, "group": group, "time point": "baseline"}
-		result, mv_matrix_df, mv_dy_matrix_df, minPoint, maxPoint = result_analysis(os.path.join(data_folder,case),minPoint=minPoint,maxPoint=maxPoint,probe=probe)
-		row.update(result)
-		result_df = result_df.append(pd.Series(row),ignore_index=True)
+		for stage in stages:
+			row = {"patient": case, "time point": stage}
+			if perform_fit:
+				result, mv_matrix_df, mv_dy_matrix_df, minPoint, maxPoint = result_analysis(os.path.join(data_folder,case,stage),minPoint=minPoint,maxPoint=maxPoint,probe=probe, perform_fit=perform_fit)
+			
+				# save the moving variance matrix
+				mv_matrix_df.to_csv(os.path.join(data_folder,case,"mv_matrix.csv"),index=True)
+				mv_dy_matrix_df.to_csv(os.path.join(data_folder,case,"mv_df_matrix.csv"),index=True)
+			else:
+				result, minPoint, maxPoint = result_analysis(os.path.join(data_folder,case,stage),minPoint=minPoint,maxPoint=maxPoint,probe=probe, perform_fit=perform_fit)
 
-		# save the moving variance matrix
-		mv_matrix_df.to_csv(os.path.join(data_folder,case,"mv_matrix.csv"),index=True)
-		mv_dy_matrix_df.to_csv(os.path.join(data_folder,case,"mv_df_matrix.csv"),index=True)
+			row.update(result)
+			result_df = result_df.append(pd.Series(row),ignore_index=True)
 
 	result_df.to_csv(output_file,index=False)
 
 if __name__=="__main__":
-	# main()
-	main2()
+	main()
