@@ -792,6 +792,79 @@ def probe_min_max_point(centerline_filename, surface_filename, minPoint=(0,0,0),
 
 	return DoS, minPoint, maxPoint
 
+def translesional_result(centerline_file,vtk_file_list, output_dir,minPoint=(0,0,0), prox_dist=5, dist_dist=5):
+	# read centerline
+	centerlineReader = vtk.vtkXMLPolyDataReader()
+	centerlineReader.SetFileName(centerline_file)
+	centerlineReader.Update()
+	centerline = centerlineReader.GetOutput()
+
+	# read vtk files
+	vtk_files = []
+	centerlines = []
+
+	if not os.path.exists(output_dir):
+		os.makedirs(output_dir)
+
+	if not os.path.exists(os.path.join(output_dir,"centerlines")):
+		os.makedirs(os.path.join(output_dir,"centerlines"))
+
+	# average filter
+	averageFilter = vtk.vtkTemporalStatistics()
+
+	for file_name in vtk_file_list:
+		reader = vtk.vtkUnstructuredGridReader()
+		reader.SetFileName(file_name)
+		reader.Update() 
+
+		geomFilter = vtk.vtkGeometryFilter()
+		geomFilter.SetInputData(reader.GetOutput())
+		geomFilter.Update()
+
+		# scale up the CFD result
+		transform = vtk.vtkTransform()
+		transform.Scale(1000,1000,1000)
+
+		transformFilter = vtk.vtkTransformPolyDataFilter()
+		transformFilter.SetInputData(geomFilter.GetOutput())
+		transformFilter.SetTransform(transform)
+		transformFilter.Update()
+
+		vtk_files.append(transformFilter.GetOutput())
+
+		interpolator = vtk.vtkPointInterpolator()
+		interpolator.SetSourceData(transformFilter.GetOutput())
+		interpolator.SetInputData(centerline)
+		interpolator.Update()
+
+		# convert to desired unit
+		# get the first element pressure
+		try:
+			first_point_pressure = interpolator.GetOutput().GetPointData().GetArray("p").GetValue(0)
+		except:
+			first_point_pressure = 120
+
+		converter = vtk.vtkArrayCalculator()
+		converter.SetInputData(interpolator.GetOutput())
+		converter.AddScalarArrayName("p")
+		converter.SetFunction("120 + (p - {}) * 921 * 0.0075".format(first_point_pressure)) # 921 = mu/nu = density of blood, 0.0075 converts from Pascal to mmHg, offset 120mmHg at ica
+		converter.SetResultArrayName("p(mmHg)")
+		converter.Update()
+
+		# output the probe centerline
+		centerline_output_path = os.path.join(
+			os.path.dirname(centerline_file),
+			output_dir,
+			"centerlines",
+			"centerline_probe_{}.vtp".format(os.path.split(file_name)[1].split("_")[1].split(".")[0]) 
+			)
+
+		centerlines.append(converter.GetOutput())
+		averageFilter.SetInputData(converter.GetOutput())
+		averageFilter.Update()
+
+	centerline = averageFilter.GetOutput()
+
 def result_analysis(case_dir, minPoint=(0,0,0), maxPoint=(0,0,0), probe=False, perform_fit=False):
 	# load domain json file
 	with open(os.path.join(case_dir,"domain.json")) as f:
@@ -824,6 +897,9 @@ def result_analysis(case_dir, minPoint=(0,0,0), maxPoint=(0,0,0), probe=False, p
 
 		with open(os.path.join(case_dir,"domain.json"), 'w') as f:
 			json.dump(domain, f)
+
+		# translesional values
+
 	else:
 		DoS = 0
 
