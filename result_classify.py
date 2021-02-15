@@ -2,9 +2,9 @@ import pandas as pd
 import os
 import numpy as np
 import matplotlib
+matplotlib.use("TkAgg")
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
-matplotlib.use("TkAgg")
 
 from sklearn import decomposition
 from sklearn import datasets
@@ -20,7 +20,7 @@ def PCA_2D(X,Y):
 	ax.set_xlabel('Principal Component 1', fontsize = 15)
 	ax.set_ylabel('Principal Component 2', fontsize = 15)
 	ax.set_title('2 component PCA', fontsize = 20)
-	targets = ['Normal', 'Stenosis']
+	targets = ['Normal', 'Stroke']
 
 	resultDf = pd.DataFrame(data = Y, columns = ['result'])
 
@@ -55,7 +55,7 @@ def PCA_3D(X,Y):
 	X_iris = iris.data
 	y_iris = iris.target
 
-	for name, label in [('Normal', 0), ('Stenosis', 1)]:
+	for name, label in [('Normal', 0), ('Stroke', 1)]:
 		ax.text3D(
 			X[Y == label, 0].mean(),
 			X[Y == label, 1].mean() + 1.5, 
@@ -74,34 +74,30 @@ def PCA_3D(X,Y):
 	plt.show()
 
 def main():
-	result_csv = "Z:/data/intracranial/data_30_30/pmv_result.csv"
+	result_csv = "Z:/projects/intracranial/results.csv"
 
 	result = pd.read_csv(result_csv)
 	result_X = result[[
-		# "window",
-		"Radius_average",
-		"U_average",
-		"p(mmHg)_average",
-		"vorticity_average",
-		# "Curvature_average",
-		# "Torsion_average",
-		"Radius_average_dev",
-		"U_average_dev",
-		"p(mmHg)_average_dev",
-		"vorticity_average_dev",
-		# "Curvature_average_dev",
-		# "Torsion_average_dev"
+		# "radius mean(mm)",
+		"degree of stenosis(%)",
+		# "radius min(mm)",
+		# "pressure mean(mmHg)",
+		# "max pressure gradient(mmHg)",	
+		"in/out pressure gradient(mmHg)",	
+		# "velocity mean(ms^-1)",	
+		"peak velocity(ms^-1)",
+		# "max velocity gradient(ms^-1)",	
+		# "vorticity mean(s^-1)",	
+		"peak vorticity(s^-1)"
 		]]
 
-	result_Y = result[["dataset"]]
+	result_Y = result[["Stroke"]]
 
-	result_X_array = np.sqrt(result_X.to_numpy())
-	result_Y_array = np.sqrt(result_Y.to_numpy()[:,0])
+	result_X_array = result_X.to_numpy()
+	result_Y_array = result_Y.to_numpy()[:,0]
 
 	# result_X_array = np.log(np.sqrt(result_X.to_numpy()))
 	# result_Y_array = np.log(np.sqrt(result_Y.to_numpy()[:,0]))
-
-	print(np.max(result_X_array),np.max(result_Y_array))
 
 	PCA_2D(result_X_array,result_Y_array)
 	# PCA_3D(result_X_array,result_Y_array)

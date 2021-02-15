@@ -865,6 +865,24 @@ def translesional_result(centerline_file,vtk_file_list, output_dir,minPoint=(0,0
 
 	centerline = averageFilter.GetOutput()
 
+	# extract lesion section
+	# get the abscissas of min radius point
+
+	# Create kd tree
+	kDTree = vtk.vtkKdTreePointLocator()
+	kDTree.SetDataSet(centerline)
+	kDTree.BuildLocator()
+
+	minPoint_absc = # compute degree of stenosis
+	minIdx = kDTree.FindClosestPoint(minPoint)
+	minRadius = centerline.GetPointData().GetArray("Abscissas_average").GetTuple(minIdx)[0]
+
+	thresholdFilter = vtk.vtkThreshold()
+	thresholdFilter.ThresholdBetween(minPoint_absc-prox_dist,minPoint_absc+dist_dist)
+	thresholdFilter.SetInputData(centerline)
+	thresholdFilter.SetInputArrayToProcess(1, 0, 0, 0, "Abscissas_average")
+	thresholdFilter.Update()
+
 def result_analysis(case_dir, minPoint=(0,0,0), maxPoint=(0,0,0), probe=False, perform_fit=False):
 	# load domain json file
 	with open(os.path.join(case_dir,"domain.json")) as f:
@@ -873,6 +891,8 @@ def result_analysis(case_dir, minPoint=(0,0,0), maxPoint=(0,0,0), probe=False, p
 	centerline = os.path.join(case_dir, domain["centerline"]["filename"])
 	surface = os.path.join(case_dir, domain["domain"]["filename"])
 	output_dir = os.path.join(case_dir,"CFD_OpenFOAM_result")
+
+	return_value = {}
 
 	if probe:
 		try:
@@ -891,19 +911,27 @@ def result_analysis(case_dir, minPoint=(0,0,0), maxPoint=(0,0,0), probe=False, p
 
 		if minPoint != (0,0,0):
 			domain["fiducial_0"] = {"coordinate": minPoint, "type": "Stenosis"}
+			# translesional values
+			# load last 5 time points and take average
+			results_vtk = []
 
+			for time in range(0,2001,100):
+			results_vtk.append(os.path.join(case_dir,"CFD_OpenFOAM", "VTK","OpenFOAM_" + str(time)+".vtk"))
+			return_value_ = translesional_result(
+				os.path.join(case_dir,domain["centerline"]["filename"]),
+				results_vtk[-5:],
+				output_dir, 
+				minPoint=minPoint
+				)
 		if maxPoint != (0,0,0):
 			domain["fiducial_1"] = {"coordinate": maxPoint, "type": "DoS_Ref"}
 
 		with open(os.path.join(case_dir,"domain.json"), 'w') as f:
-			json.dump(domain, f)
-
-		# translesional values
-
+			json.dump(domain, f)		
 	else:
 		DoS = 0
 
-	return_value = {}
+	return_value['degree of stenosis(%)'] = DoS
 
 	if perform_fit:
 		# load last 5 time points and take average
@@ -921,8 +949,6 @@ def result_analysis(case_dir, minPoint=(0,0,0), maxPoint=(0,0,0), probe=False, p
 			)
 
 		return_value.update(return_value_)
-
-	return_value['degree of stenosis(%)'] = DoS
 
 	if perform_fit:
 		return return_value, mv_matrix_df, mv_dy_matrix_df, minPoint, maxPoint
