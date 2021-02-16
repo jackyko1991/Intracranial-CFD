@@ -792,12 +792,17 @@ def probe_min_max_point(centerline_filename, surface_filename, minPoint=(0,0,0),
 
 	return DoS, minPoint, maxPoint
 
-def translesional_result(centerline_file,vtk_file_list, output_dir,minPoint=(0,0,0), prox_dist=5, dist_dist=5):
+def translesional_result(centerline_file, wall_file,vtk_file_list, output_dir,minPoint=(0,0,0), prox_dist=5, dist_dist=5):
 	# read centerline
 	centerlineReader = vtk.vtkXMLPolyDataReader()
 	centerlineReader.SetFileName(centerline_file)
 	centerlineReader.Update()
 	centerline = centerlineReader.GetOutput()
+
+	# read vessel wall
+	wallReader = vtk.vtkSTLReader()
+	wallReader.SetFileName(wall_file)
+	wallReader.Update()
 
 	# read vtk files
 	vtk_files = []
@@ -851,6 +856,13 @@ def translesional_result(centerline_file,vtk_file_list, output_dir,minPoint=(0,0
 		converter.SetResultArrayName("p(mmHg)")
 		converter.Update()
 
+		converter2 = vtk.vtkArrayCalculator()
+		converter2.SetInputData(converter.GetOutput())
+		converter2.AddVectorArrayName("wallShearStress")
+		converter2.SetFunction("wallShearStress * 921") # 921 = mu/nu = density of blood, 0.0075 converts from Pascal to mmHg, http://aboutcfd.blogspot.com/2017/05/wallshearstress-in-openfoam.html
+		converter2.SetResultArrayName("wallShearStress(Pa)")
+		converter2.Update()
+
 		# output the probe centerline
 		centerline_output_path = os.path.join(
 			os.path.dirname(centerline_file),
@@ -859,29 +871,82 @@ def translesional_result(centerline_file,vtk_file_list, output_dir,minPoint=(0,0
 			"centerline_probe_{}.vtp".format(os.path.split(file_name)[1].split("_")[1].split(".")[0]) 
 			)
 
-		centerlines.append(converter.GetOutput())
-		averageFilter.SetInputData(converter.GetOutput())
-		averageFilter.Update()
+		centerlines.append(converter2.GetOutput())
+		averageFilter.SetInputData(converter2.GetOutput())
+	averageFilter.Update()
 
 	centerline = averageFilter.GetOutput()
 
 	# extract lesion section
 	# get the abscissas of min radius point
-
 	# Create kd tree
 	kDTree = vtk.vtkKdTreePointLocator()
 	kDTree.SetDataSet(centerline)
 	kDTree.BuildLocator()
 
-	minPoint_absc = # compute degree of stenosis
 	minIdx = kDTree.FindClosestPoint(minPoint)
-	minRadius = centerline.GetPointData().GetArray("Abscissas_average").GetTuple(minIdx)[0]
-
+	minPoint_absc = centerline.GetPointData().GetArray("Abscissas_average").GetTuple(minIdx)[0]
 	thresholdFilter = vtk.vtkThreshold()
 	thresholdFilter.ThresholdBetween(minPoint_absc-prox_dist,minPoint_absc+dist_dist)
 	thresholdFilter.SetInputData(centerline)
-	thresholdFilter.SetInputArrayToProcess(1, 0, 0, 0, "Abscissas_average")
+	thresholdFilter.SetAllScalars(0) # important !!!
+	thresholdFilter.SetInputArrayToProcess(0, 0, 0, vtk.vtkDataObject.FIELD_ASSOCIATION_POINTS,"Abscissas_average");
 	thresholdFilter.Update()
+
+	# to vtkpolydata
+	geometryFilter = vtk.vtkGeometryFilter()
+	geometryFilter.SetInputData(thresholdFilter.GetOutput())
+	geometryFilter.Update()
+
+	# get closest line
+	connectFilter = vtk.vtkConnectivityFilter()
+	connectFilter.SetExtractionModeToClosestPointRegion()
+	connectFilter.SetClosestPoint(minPoint)
+	connectFilter.SetInputData(geometryFilter.GetOutput())
+	connectFilter.Update()
+
+	# compute result values
+	abscissas = vtk_to_numpy(thresholdFilter.GetOutput().GetPointData().GetArray("Abscissas_average"))
+	abscissas_unique, index = np.unique(sorted(abscissas), axis=0, return_index=True)
+
+	pressure = vtk_to_numpy(thresholdFilter.GetOutput().GetPointData().GetArray("p(mmHg)_average"))
+	pressure = [x for _, x in sorted(zip(abscissas,pressure))]
+	pressure = [pressure[x] for x in index]
+	pressure_gradient = np.diff(pressure)/np.diff(abscissas_unique)
+
+	velocity = vtk_to_numpy(thresholdFilter.GetOutput().GetPointData().GetArray("U_average"))
+	velocity = [math.sqrt(value[0]**2 + value[1]**2 +value[2]**2 ) for value in velocity]
+	velocity = [x for _, x in sorted(zip(abscissas,velocity))]
+	velocity = [velocity[x] for x in index]
+	velocity_gradient = np.diff(velocity)/np.diff(abscissas_unique)
+
+	vorticity = vtk_to_numpy(thresholdFilter.GetOutput().GetPointData().GetArray("vorticity_average"))
+	vorticity = [math.sqrt(value[0]**2 + value[1]**2 +value[2]**2 ) for value in vorticity]
+	vorticity = [x for _, x in sorted(zip(abscissas,vorticity))]
+	vorticity = [vorticity[x] for x in index]
+	vorticity_gradient = np.diff(vorticity)/np.diff(abscissas_unique)
+
+	wss = vtk_to_numpy(thresholdFilter.GetOutput().GetPointData().GetArray("wallShearStress(Pa)_average"))
+	wss = [math.sqrt(value[0]**2 + value[1]**2 +value[2]**2 ) for value in wss]
+	wss = [wss[x] for x in index]
+	wss = [x for _, x in sorted(zip(abscissas,wss))]
+	wss_gradient = np.diff(wss)/np.diff(abscissas_unique)
+
+	return_value = {
+		'translesion peak presssure(mmHg)': np.mean(heapq.nlargest(1, pressure)),
+		'translesion presssure ratio': pressure[-1]/pressure[0],
+		'translesion peak pressure gradient(mmHgmm^-1)': np.mean(heapq.nlargest(1, pressure_gradient)),
+		'translesion peak velocity(ms^-1)': np.mean(heapq.nlargest(1, velocity)),
+		'translesion velocity ratio': velocity[-1]/velocity[0],
+		'translesion peak velocity gradient(ms^-1mm^-1)': np.mean(heapq.nlargest(1, velocity_gradient)),
+		'translesion peak vorticity(ms^-1)': np.mean(heapq.nlargest(1, vorticity)),
+		'translesion vorticity ratio':vorticity[-1]/vorticity[0],
+		'translesion peak vorticity gradient(Pamm^-1)':np.mean(heapq.nlargest(1, vorticity_gradient)),
+		'translesion peak wss(Pa)': np.mean(heapq.nlargest(1, wss)),
+		'translesion peak wss gradient(Pamm^-1)': np.mean(heapq.nlargest(1, wss_gradient)),
+	}
+
+	return return_value
 
 def result_analysis(case_dir, minPoint=(0,0,0), maxPoint=(0,0,0), probe=False, perform_fit=False):
 	# load domain json file
@@ -916,13 +981,15 @@ def result_analysis(case_dir, minPoint=(0,0,0), maxPoint=(0,0,0), probe=False, p
 			results_vtk = []
 
 			for time in range(0,2001,100):
-			results_vtk.append(os.path.join(case_dir,"CFD_OpenFOAM", "VTK","OpenFOAM_" + str(time)+".vtk"))
+				results_vtk.append(os.path.join(case_dir,"CFD_OpenFOAM", "VTK","OpenFOAM_" + str(time)+".vtk"))
 			return_value_ = translesional_result(
 				os.path.join(case_dir,domain["centerline"]["filename"]),
+				os.path.join(case_dir,domain["vessel"]["filename"]),
 				results_vtk[-5:],
 				output_dir, 
 				minPoint=minPoint
 				)
+			return_value.update(return_value_)
 		if maxPoint != (0,0,0):
 			domain["fiducial_1"] = {"coordinate": maxPoint, "type": "DoS_Ref"}
 
@@ -976,15 +1043,27 @@ def main():
 		'radius mean(mm)','degree of stenosis(%)','radius min(mm)',
 		'pressure mean(mmHg)','max pressure gradient(mmHg)','in/out pressure gradient(mmHg)',
 		'velocity mean(ms^-1)','peak velocity(ms^-1)','max velocity gradient(ms^-1)',
-		'vorticity mean(s^-1)','peak vorticity(s^-1)']
+		'vorticity mean(s^-1)','peak vorticity(s^-1)',
+		'translesion peak presssure(mmHg)',
+		'translesion presssure ratio',
+		'translesion peak pressure gradient(mmHgmm^-1)',
+		'translesion peak velocity(ms^-1)',
+		'translesion velocity ratio',
+		'translesion peak velocity gradient(ms^-1mm^-1)',
+		'translesion peak vorticity(ms^-1)',
+		'translesion vorticity ratio',
+		'translesion peak vorticity gradient(Pamm^-1)',
+		'translesion peak wss(Pa)',
+		'translesion peak wss gradient(Pamm^-1)',
+		]
 
 	result_df = pd.DataFrame(columns=field_names)
 
 	pbar = tqdm(os.listdir(data_folder))
-	pbar = tqdm([
-		"038",
+	# pbar = tqdm([
+		# "038",
 		# "050"
-		])
+		# ])
 
 	ignore_case = [
 		"ChanSiuYung",
@@ -1008,7 +1087,7 @@ def main():
 			continue
 
 		for stage in stages:
-			row = {"patient": case, "time point": stage}
+			row = {"patient": case, "stage": stage}
 			if perform_fit:
 				result, mv_matrix_df, mv_dy_matrix_df, minPoint, maxPoint = result_analysis(os.path.join(data_folder,case,stage),minPoint=minPoint,maxPoint=maxPoint,probe=probe, perform_fit=perform_fit)
 			
