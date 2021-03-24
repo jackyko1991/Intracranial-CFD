@@ -3,8 +3,8 @@ from icad_solver import *
 from tqdm import tqdm
 
 def main():
-	# data_dir = "/mnt/DIIR-JK-NAS/data/intracranial"
-	data_dir = "Z:/data/intracranial"
+	data_dir = "/mnt/DIIR-JK-NAS/data/intracranial"
+	# data_dir = "Z:/data/intracranial"
 	sub_data_dirs = [
 		"data_ESASIS_followup/medical",
 		"data_ESASIS_followup/stent",
