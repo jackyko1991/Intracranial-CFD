@@ -417,11 +417,11 @@ class Classify:
 		return fold_aucs, macro_aucs
 
 def main():
-	result_csv = "Z:/data/intracranial/CFD_results/results.csv"
-	plot_output_dir = "Z:/data/intracranial/CFD_results/plots/results_all"
-	kfold_output_csv = "Z:/data/intracranial/CFD_results/auc/results_all_kfold_aucs.csv"
-	macro_output_csv = "Z:/data/intracranial/CFD_results/auc/results_all_macro_aucs.csv"
-	probability_output_csv = "Z:/data/intracranial/CFD_results/results_with_probability_all.csv"
+	result_csv = "Z:/data/intracranial/CFD_results/results_no_neg_pressure.csv"
+	plot_output_dir = "Z:/data/intracranial/CFD_results/plots/results_all2"
+	kfold_output_csv = "Z:/data/intracranial/CFD_results/auc/results_all2_kfold_aucs.csv"
+	macro_output_csv = "Z:/data/intracranial/CFD_results/auc/results_all2_macro_aucs.csv"
+	probability_output_csv = "Z:/data/intracranial/CFD_results/results_with_probability_all2.csv"
 
 	# result_csv = "Z:/data/intracranial/CFD_results/scores.csv"
 	# # result_csv = "/Volumes/shared/projects/intracranial/results.csv"
@@ -442,16 +442,29 @@ def main():
 	]
 
 	result_X = result[[
-		"radius mean(mm)",
-		"radius min(mm)",
-		"pressure mean(mmHg)",
+		# "radius mean(mm)",
+		# "degree of stenosis(%)",
+		# "radius min(mm)",
+		# "pressure mean(mmHg)",
+		# "max radius gradient",
 		"max pressure gradient(mmHg)",
 		"in/out pressure gradient(mmHg)",
-		"velocity mean(ms^-1)",
+		# "velocity mean(ms^-1)",
 		"peak velocity(ms^-1)",
 		"max velocity gradient(ms^-1)",
-		"vorticity mean(s^-1)",	
-		"peak vorticity(s^-1)"
+		# "vorticity mean(s^-1)",	
+		"peak vorticity(s^-1)",
+		# "translesion peak presssure(mmHg)",
+		# "translesion presssure ratio",	
+		# "translesion peak pressure gradient(mmHgmm^-1)",	
+		# "translesion peak velocity(ms^-1)",	
+		# "translesion velocity ratio",	
+		# "translesion peak velocity gradient(ms^-1mm^-1)",
+		# "translesion peak vorticity(ms^-1)",
+		# "translesion vorticity ratio",	
+		# "translesion peak vorticity gradient(Pamm^-1)",
+		# "translesion peak wss(Pa)",	
+		# "translesion peak wss gradient(Pamm^-1)"
 		]]
 
 	# # selected by anova
@@ -480,14 +493,14 @@ def main():
 	# 	"degree of stenosis(%)",
 	# 	]]
 
-	result_Y = result[["Stroke","Severity","ICAD", "Stroke in 1 year"]]
+	result_Y = result[["Stroke","Type","ICAD", "Stroke in 1 year"]]
 
 	result_X_array = result_X.to_numpy()
 	# severity
 	# classes = [0,1,2]
 	# classnames = ["normal","moderate","severe"]
 	classes = [0,1]
-	classnames = ["normal","Stroke"]
+	classnames = ["normal","stroke"]
 	# classnames = ["normal","ICAD"]
 
 	# stroke: [:,0], severity: [:,1], "icad": [:,2]

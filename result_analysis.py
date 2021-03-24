@@ -185,6 +185,9 @@ def plot_centerline_result(centerline, array_names, result_path, dev_result_path
 			x = vtk_to_numpy(thresholdFilter.GetOutput().GetPointData().GetArray("Abscissas_average"))
 			x = [(value - x[0]) for value in x]
 
+			if len(x) < 3:
+				continue
+
 			y = vtk_to_numpy(thresholdFilter.GetOutput().GetPointData().GetArray(array_names[i]))
 
 			if len(y.shape) > 1:
@@ -216,7 +219,7 @@ def plot_centerline_result(centerline, array_names, result_path, dev_result_path
 			ax2.plot(xs,dys)
 
 			# curve fitting on specific values
-			if array_names[i] == "U_average" or array_names[i] == "p(mmHg)_average":
+			if array_names[i] == "Radius_average" or array_names[i] == "U_average" or array_names[i] == "p(mmHg)_average":
 				try:
 					popt, pcov = curve_fit(fit_func, xs, dys, p0=[50,0.1,-50])
 
@@ -280,6 +283,8 @@ def plot_centerline_result(centerline, array_names, result_path, dev_result_path
 		else:
 			ax.set_xticklabels([])
 			ax2.set_xticklabels([])
+
+		x = vtk_to_numpy(centerline.GetPointData().GetArray("Abscissas_average"))
 		ax.set_xlim(x[0],x[-1])
 		ax.set_ylim(ymin,ymax)
 		ax2.set_xlim(x[0],x[-1])
@@ -410,6 +415,7 @@ def centerline_probe_result(centerline_file,vtk_file_list, output_dir,minPoint=(
 		tqdm.write("Centerline file {} does not contain suitable number of CenterlineIds".format(centerline_file))
 		return {
 			'radius mean(mm)': "NA",
+			'max radius gradient':"NA",
 			'radius min(mm)': "NA",
 			'pressure mean(mmHg)': "NA",
 			'max pressure gradient(mmHg)': "NA",
@@ -434,6 +440,7 @@ def centerline_probe_result(centerline_file,vtk_file_list, output_dir,minPoint=(
 	return_value = {
 		'radius mean(mm)': np.mean(radius),
 		'radius min(mm)': np.min(radius),
+		'max radius gradient': fit_dict["Radius_average"],
 		'pressure mean(mmHg)': np.mean(pressure),
 		# 'max pressure gradient(mmHg)': np.mean(heapq.nlargest(5, pressure_gradient)),
 		'max pressure gradient(mmHg)': fit_dict["p(mmHg)_average"], 
@@ -647,7 +654,7 @@ def moving_variance_matrix(centerline,fields, windows, minPoint=(0,0,0), bifurca
 
 	return pmv_df, pmv_dy_df
 
-def probe_min_max_point(centerline_filename, surface_filename, minPoint=(0,0,0), maxPoint=(0,0,0)):
+def probe_min_max_point(centerline_filename, surface_filename, minPoint=(0,0,0), maxPoint=(0,0,0),probe=True):
 	centerlineReader = vtk.vtkXMLPolyDataReader()
 	centerlineReader.SetFileName(centerline_filename)
 	centerlineReader.Update()
@@ -753,30 +760,31 @@ def probe_min_max_point(centerline_filename, surface_filename, minPoint=(0,0,0),
 	currentSelectionTextActor.SetPosition([0.25, 0.1])
 	currentSelectionTextActor.SetInput("Current selection: min point (red)")
 
-	renderer = vtk.vtkRenderer()
-	renderer.AddActor(centerlineActor)
-	renderer.AddActor(surfaceActor)
-	renderer.AddActor(minActor)
-	renderer.AddActor(maxActor)
-	renderer.AddActor2D(scalarBar)
-	renderer.AddActor(usageTextActor)
-	renderer.AddActor(currentSelectionTextActor)
+	if probe:
+		renderer = vtk.vtkRenderer()
+		renderer.AddActor(centerlineActor)
+		renderer.AddActor(surfaceActor)
+		renderer.AddActor(minActor)
+		renderer.AddActor(maxActor)
+		renderer.AddActor2D(scalarBar)
+		renderer.AddActor(usageTextActor)
+		renderer.AddActor(currentSelectionTextActor)
 
-	renderWindow = vtk.vtkRenderWindow()
-	renderWindow.AddRenderer(renderer)
+		renderWindow = vtk.vtkRenderWindow()
+		renderWindow.AddRenderer(renderer)
 
-	renderWindowInteractor = vtk.vtkRenderWindowInteractor()
-	renderWindowInteractor.SetRenderWindow(renderWindow)
-	mystyle = MyInteractorStyle(renderWindowInteractor)
-	mystyle.SetMaxSphereSource(maxSource)
-	mystyle.SetMinSphereSource(minSource)
-	mystyle.SetCenterline(centerline)
-	mystyle.SetSelectionTextActor(currentSelectionTextActor)
-	renderWindowInteractor.SetInteractorStyle(mystyle)
+		renderWindowInteractor = vtk.vtkRenderWindowInteractor()
+		renderWindowInteractor.SetRenderWindow(renderWindow)
+		mystyle = MyInteractorStyle(renderWindowInteractor)
+		mystyle.SetMaxSphereSource(maxSource)
+		mystyle.SetMinSphereSource(minSource)
+		mystyle.SetCenterline(centerline)
+		mystyle.SetSelectionTextActor(currentSelectionTextActor)
+		renderWindowInteractor.SetInteractorStyle(mystyle)
 
-	renderWindow.SetSize(1024,780); #(width, height)
-	renderWindow.Render()
-	renderWindowInteractor.Start()
+		renderWindow.SetSize(1024,780); #(width, height)
+		renderWindow.Render()
+		renderWindowInteractor.Start()
 
 	minPoint = minSource.GetCenter()
 	maxPoint = maxSource.GetCenter()
@@ -932,23 +940,40 @@ def translesional_result(centerline_file, wall_file,vtk_file_list, output_dir,mi
 	wss = [x for _, x in sorted(zip(abscissas,wss))]
 	wss_gradient = np.diff(wss)/np.diff(abscissas_unique)
 
+	epsilon = 0.00001
+
+	p_ratio = np.mean(pressure[-4:-1])/(np.mean(pressure[0:3])+epsilon)
+	u_ratio = np.mean(velocity[-4:-1])/(np.mean(velocity[0:3])+epsilon)
+	w_ratio = np.mean(vorticity[-4:-1])/(np.mean(vorticity[0:3])+epsilon)
+	wss_ratio = np.mean(wss[-4:-1])/(np.mean(wss[0:3])+epsilon)
+
+	dp_ratio = np.mean(pressure_gradient[-4:-1])/(np.mean(pressure_gradient[0:3])+epsilon)
+	du_ratio = np.mean(velocity_gradient[-4:-1])/(np.mean(velocity_gradient[0:3])+epsilon)
+	dw_ratio = np.mean(vorticity_gradient[-4:-1])/(np.mean(vorticity_gradient[0:3])+epsilon)
+	dwss_ratio = np.mean(wss_gradient[-4:-1])/(np.mean(wss_gradient[0:3])+epsilon)
+
 	return_value = {
 		'translesion peak presssure(mmHg)': np.mean(heapq.nlargest(1, pressure)),
-		'translesion presssure ratio': pressure[-1]/pressure[0],
+		'translesion presssure ratio': p_ratio,
 		'translesion peak pressure gradient(mmHgmm^-1)': np.mean(heapq.nlargest(1, pressure_gradient)),
+		'translesion pressure gradient ratio': dp_ratio,
 		'translesion peak velocity(ms^-1)': np.mean(heapq.nlargest(1, velocity)),
-		'translesion velocity ratio': velocity[-1]/velocity[0],
+		'translesion velocity ratio': u_ratio,
+		'translesion velocity gradient ratio': du_ratio,
 		'translesion peak velocity gradient(ms^-1mm^-1)': np.mean(heapq.nlargest(1, velocity_gradient)),
 		'translesion peak vorticity(ms^-1)': np.mean(heapq.nlargest(1, vorticity)),
-		'translesion vorticity ratio':vorticity[-1]/vorticity[0],
+		'translesion vorticity ratio': w_ratio,
+		'translesion vorticity gradient ratio': dw_ratio,
 		'translesion peak vorticity gradient(Pamm^-1)':np.mean(heapq.nlargest(1, vorticity_gradient)),
 		'translesion peak wss(Pa)': np.mean(heapq.nlargest(1, wss)),
 		'translesion peak wss gradient(Pamm^-1)': np.mean(heapq.nlargest(1, wss_gradient)),
+		'translesion wss ratio': wss_ratio,
+		'translesion wss gradient ratio': dwss_ratio,
 	}
 
 	return return_value
 
-def result_analysis(case_dir, minPoint=(0,0,0), maxPoint=(0,0,0), probe=False, perform_fit=False):
+def result_analysis(case_dir, minPoint=(0,0,0), maxPoint=(0,0,0), probe=False ,stenosis=True, perform_fit=False):
 	# load domain json file
 	with open(os.path.join(case_dir,"domain.json")) as f:
 		domain = json.load(f)
@@ -959,7 +984,7 @@ def result_analysis(case_dir, minPoint=(0,0,0), maxPoint=(0,0,0), probe=False, p
 
 	return_value = {}
 
-	if probe:
+	if stenosis:
 		try:
 			assert domain["fiducial_0"]["type"] == "Stenosis", "\"fiducial_0\" is not Stenosis"
 			minPoint = tuple(domain["fiducial_0"]["coordinate"])
@@ -972,7 +997,8 @@ def result_analysis(case_dir, minPoint=(0,0,0), maxPoint=(0,0,0), probe=False, p
 		except:
 			maxPoint = (0,0,0)
 
-		DoS, minPoint, maxPoint = probe_min_max_point(centerline,surface,minPoint,maxPoint)
+
+		DoS, minPoint, maxPoint = probe_min_max_point(centerline,surface,minPoint,maxPoint, probe=probe)
 
 		if minPoint != (0,0,0):
 			domain["fiducial_0"] = {"coordinate": minPoint, "type": "Stenosis"}
@@ -1023,52 +1049,53 @@ def result_analysis(case_dir, minPoint=(0,0,0), maxPoint=(0,0,0), probe=False, p
 		return return_value, minPoint, maxPoint
 
 def main():
-	probe=True
-	perform_fit = False
+	probe=False
+	stenosis=False
+	perform_fit = True
 
-	# output_file = "/mnt/DIIR-JK-NAS/data/intracranial/CFD_results/result_089.csv"
-	# data_folder = "/mnt/DIIR-JK-NAS/data/intracranial/data_ESASIS_followup/stent"
+	# output_file = "Z:/data/intracranial/CFD_results/result_medical.csv"
+	# data_folder = "Z:/data/intracranial/data_ESASIS_followup/medical"
 
-	# output_file = "Z:/data/intracranial/data_30_30/result_EASIS_medical.csv"
-	# data_folder = "Z:/data/intracranial/data_30_30/stenosis/ESASIS_medical"
+	# output_file = "Z:/data/intracranial/CFD_results/result_stent.csv"
+	# data_folder = "Z:/data/intracranial/data_ESASIS_followup/stent"
 
-	# output_file = "Z:/data/intracranial/data_30_30/result_EASIS_stent.csv"
-	# data_folder = "Z:/data/intracranial/data_30_30/stenosis/ESASIS_stent"
+	# output_file = "Z:/data/intracranial/CFD_results/result_data_no_stenting.csv"
+	# data_folder = "Z:/data/intracranial/data_ESASIS_no_stenting"
 
-	output_file = "Z:/data/intracranial/CFD_results/result_medical.csv"
-	data_folder = "Z:/data/intracranial/data_ESASIS_followup/medical"
+	output_file = "Z:/data/intracranial/CFD_results/result_data_surgery.csv"
+	data_folder = "Z:/data/intracranial/data_surgery"
 
 	# create result dataframe
 	field_names = ['patient','stage',
 		'radius mean(mm)','degree of stenosis(%)','radius min(mm)',
+		'max radius gradient',
 		'pressure mean(mmHg)','max pressure gradient(mmHg)','in/out pressure gradient(mmHg)',
 		'velocity mean(ms^-1)','peak velocity(ms^-1)','max velocity gradient(ms^-1)',
 		'vorticity mean(s^-1)','peak vorticity(s^-1)',
 		'translesion peak presssure(mmHg)',
 		'translesion presssure ratio',
 		'translesion peak pressure gradient(mmHgmm^-1)',
+		'translesion pressure gradient ratio',
 		'translesion peak velocity(ms^-1)',
 		'translesion velocity ratio',
 		'translesion peak velocity gradient(ms^-1mm^-1)',
+		'translesion velocity gradient ratio',
 		'translesion peak vorticity(ms^-1)',
 		'translesion vorticity ratio',
 		'translesion peak vorticity gradient(Pamm^-1)',
+		'translesion vorticity gradient ratio',
 		'translesion peak wss(Pa)',
+		'translesion wss ratio',
 		'translesion peak wss gradient(Pamm^-1)',
+		'translesion wss gradient ratio',
 		]
 
 	result_df = pd.DataFrame(columns=field_names)
 
 	pbar = tqdm(os.listdir(data_folder))
-	# pbar = tqdm([
-		# "038",
-		# "050"
-		# ])
 
 	ignore_case = [
-		"ChanSiuYung",
-		"ChuFongShu",
-		"ChanMeiLing"
+		"217",
 	]
 
 	stages = ["baseline"]
@@ -1095,7 +1122,7 @@ def main():
 				mv_matrix_df.to_csv(os.path.join(data_folder,case,"mv_matrix.csv"),index=True)
 				mv_dy_matrix_df.to_csv(os.path.join(data_folder,case,"mv_df_matrix.csv"),index=True)
 			else:
-				result, minPoint, maxPoint = result_analysis(os.path.join(data_folder,case,stage),minPoint=minPoint,maxPoint=maxPoint,probe=probe, perform_fit=perform_fit)
+				result, minPoint, maxPoint = result_analysis(os.path.join(data_folder,case,stage),minPoint=minPoint,maxPoint=maxPoint,probe=probe, stenosis=stenosis, perform_fit=perform_fit)
 
 			row.update(result)
 			result_df = result_df.append(pd.Series(row),ignore_index=True)

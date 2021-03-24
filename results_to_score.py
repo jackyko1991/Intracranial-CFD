@@ -70,7 +70,10 @@ def result_to_score(arr, doc, arr_name="", n_class=5, sort="asc", sigma=2.5, iqr
 		plot.add_caption(arr_name)
 
 	with doc.create(Center()) as centered:
-		with centered.create(Tabular('c|ccccc')) as table:
+		table_format = "c|"
+		for i in range(n_class):
+			table_format += "c"
+		with centered.create(Tabular(table_format)) as table:
 			table.add_row(['severity score']+[i + 1 for i in range(n_class)])
 			table.add_hline(1, n_class+1)
 			table.add_row(['range']+["{:.2f}-{:.2f}".format(bins[i],bins[i+1]) for i in reversed(range(n_class))])
@@ -81,16 +84,17 @@ def result_to_score(arr, doc, arr_name="", n_class=5, sort="asc", sigma=2.5, iqr
 	return score
 
 def main():
-	result_csv = "Z:/data/intracranial/CFD_results/results_icad.csv"
+	result_csv = "Z:/data/intracranial/CFD_results/results_no_neg_pressure.csv"
 	# result_csv = "/Volumes/shared/projects/intracranial/results.csv"
-	scores_csv = "Z:/data/intracranial/CFD_results/scores_icad.csv"
+	scores_csv = "Z:/data/intracranial/CFD_results/scores_no_neg_pressure.csv"
 
 	result = pd.read_csv(result_csv)
 
 	result_X = result[[
-		"radius mean(mm)",,
+		"radius mean(mm)",
 		'degree of stenosis(%)',
 		"radius min(mm)",
+		'max radius gradient',
 		"pressure mean(mmHg)",
 		"max pressure gradient(mmHg)",
 		"in/out pressure gradient(mmHg)",
@@ -99,29 +103,30 @@ def main():
 		"max velocity gradient(ms^-1)",
 		"vorticity mean(s^-1)",	
 		"peak vorticity(s^-1)",
-		'translesion peak presssure(mmHg)',
-		'translesion presssure ratio',
-		'translesion peak pressure gradient(mmHgmm^-1)',
-		'translesion pressure gradient ratio',
-		'translesion peak velocity(ms^-1)',
-		'translesion velocity ratio',
-		'translesion peak velocity gradient(ms^-1mm^-1)',
-		'translesion velocity gradient ratio',
-		'translesion peak vorticity(ms^-1)',
-		'translesion vorticity ratio',
-		'translesion peak vorticity gradient(Pamm^-1)',
-		'translesion vorticity gradient ratio',
-		'translesion peak wss(Pa)',
-		'translesion wss ratio',
-		'translesion peak wss gradient(Pamm^-1)',
-		'translesion wss gradient ratio',
+		# 'translesion peak presssure(mmHg)',
+		# 'translesion presssure ratio',
+		# 'translesion peak pressure gradient(mmHgmm^-1)',
+		# 'translesion pressure gradient ratio',
+		# 'translesion peak velocity(ms^-1)',
+		# 'translesion velocity ratio',
+		# 'translesion peak velocity gradient(ms^-1mm^-1)',
+		# 'translesion velocity gradient ratio',
+		# 'translesion peak vorticity(ms^-1)',
+		# 'translesion vorticity ratio',
+		# 'translesion peak vorticity gradient(Pamm^-1)',
+		# 'translesion vorticity gradient ratio',
+		# 'translesion peak wss(Pa)',
+		# 'translesion wss ratio',
+		# 'translesion peak wss gradient(Pamm^-1)',
+		# 'translesion wss gradient ratio',
 		]]
-	result_Y = result[["Stroke","Severity","ICAD"]]
+	result_Y = result[["Stroke","Type","ICAD","Stroke in 1 year"]]
 
 	order = {
 		"radius mean(mm)": "dsc",
 		'degree of stenosis(%)': "asc",
 		"radius min(mm)": "dsc",
+		'max radius gradient':"asc",
 		"pressure mean(mmHg)": "asc",
 		"max pressure gradient(mmHg)": "asc",
 		"in/out pressure gradient(mmHg)": "asc",
@@ -130,22 +135,22 @@ def main():
 		"max velocity gradient(ms^-1)": "asc",
 		"vorticity mean(s^-1)": "asc",	
 		"peak vorticity(s^-1)": "asc",
-		'translesion peak presssure(mmHg)': "asc",
-		'translesion presssure ratio': "asc",
-		'translesion peak pressure gradient(mmHgmm^-1)': "asc",
-		'translesion pressure gradient ratio': "asc",
-		'translesion peak velocity(ms^-1)': "asc",
-		'translesion velocity ratio': "asc",
-		'translesion peak velocity gradient(ms^-1mm^-1)': "asc",
-		'translesion velocity gradient ratio': "asc",
-		'translesion peak vorticity(ms^-1)': "asc",
-		'translesion vorticity ratio': "asc",
-		'translesion peak vorticity gradient(Pamm^-1)': "asc",
-		'translesion vorticity gradient ratio': "asc",
-		'translesion peak wss(Pa)': "asc",
-		'translesion wss ratio': "asc",
-		'translesion peak wss gradient(Pamm^-1)': "asc",
-		'translesion wss gradient ratio': "asc",
+		# 'translesion peak presssure(mmHg)': "asc",
+		# 'translesion presssure ratio': "asc",
+		# 'translesion peak pressure gradient(mmHgmm^-1)': "asc",
+		# 'translesion pressure gradient ratio': "asc",
+		# 'translesion peak velocity(ms^-1)': "asc",
+		# 'translesion velocity ratio': "asc",
+		# 'translesion peak velocity gradient(ms^-1mm^-1)': "asc",
+		# 'translesion velocity gradient ratio': "asc",
+		# 'translesion peak vorticity(ms^-1)': "asc",
+		# 'translesion vorticity ratio': "asc",
+		# 'translesion peak vorticity gradient(Pamm^-1)': "asc",
+		# 'translesion vorticity gradient ratio': "asc",
+		# 'translesion peak wss(Pa)': "asc",
+		# 'translesion wss ratio': "asc",
+		# 'translesion peak wss gradient(Pamm^-1)': "asc",
+		# 'translesion wss gradient ratio': "asc",
 	}
 
 	# latex option
@@ -164,6 +169,8 @@ def main():
 	columnNames = [
 		"patient",
 		"radius mean(mm)",
+		'degree of stenosis(%)',
+		'max radius gradient',
 		"radius min(mm)",
 		"pressure mean(mmHg)",
 		"max pressure gradient(mmHg)",
@@ -173,10 +180,27 @@ def main():
 		"max velocity gradient(ms^-1)",
 		"vorticity mean(s^-1)",	
 		"peak vorticity(s^-1)",
+		# 'translesion peak presssure(mmHg)',
+		# 'translesion presssure ratio',
+		# 'translesion peak pressure gradient(mmHgmm^-1)',
+		# 'translesion pressure gradient ratio',
+		# 'translesion peak velocity(ms^-1)',
+		# 'translesion velocity ratio',
+		# 'translesion peak velocity gradient(ms^-1mm^-1)',
+		# 'translesion velocity gradient ratio',
+		# 'translesion peak vorticity(ms^-1)',
+		# 'translesion vorticity ratio',
+		# 'translesion peak vorticity gradient(Pamm^-1)',
+		# 'translesion vorticity gradient ratio',
+		# 'translesion peak wss(Pa)',
+		# 'translesion wss ratio',
+		# 'translesion peak wss gradient(Pamm^-1)',
+		# 'translesion wss gradient ratio',
 		"sum",
 		"Stroke",
 		"Severity",
-		"ICAD"
+		"ICAD",
+		"Stroke in 1 year",
 		]
 
 	scores_df = pd.DataFrame(data=scores, columns=columnNames)
@@ -185,7 +209,7 @@ def main():
 
 	print("Generating pdf...")
 	doc.generate_tex()
-	doc.generate_pdf(clean_tex=True)
+	doc.generate_pdf(clean_tex=True,compiler='pdfLaTeX')
 	print("Generating pdf complete")
 
 if __name__ == "__main__":
