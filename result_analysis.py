@@ -330,15 +330,16 @@ def centerline_probe_result(centerline_file,vtk_file_list, output_dir,minPoint=(
 		reader.SetFileName(file_name)
 		reader.Update() 
 
-		geomFilter = vtk.vtkGeometryFilter()
-		geomFilter.SetInputData(reader.GetOutput())
-		geomFilter.Update()
+		# geomFilter = vtk.vtkGeometryFilter()
+		# geomFilter.SetInputData(reader.GetOutput())
+		# geomFilter.Update()
 
 		# scale up the CFD result
 		transform = vtk.vtkTransform()
 		transform.Scale(1000,1000,1000)
 
-		transformFilter = vtk.vtkTransformPolyDataFilter()
+		# transformFilter = vtk.vtkTransformPolyDataFilter()
+		transformFilter = vtk.vtkTransformFilter()
 		transformFilter.SetInputData(geomFilter.GetOutput())
 		transformFilter.SetTransform(transform)
 		transformFilter.Update()
