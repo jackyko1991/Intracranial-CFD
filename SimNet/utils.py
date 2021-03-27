@@ -50,7 +50,6 @@ def stl_concat(domain_json):
 	fout.close()
 
 def OpenFOAM_result_to_csv(case_list,output_path):
-
 	# average filter
 	averageFilter = vtk.vtkTemporalStatistics()
 
@@ -59,18 +58,10 @@ def OpenFOAM_result_to_csv(case_list,output_path):
 		reader.SetFileName(case)
 		reader.Update() 
 
-		geomFilter = vtk.vtkGeometryFilter()
-		geomFilter.SetInputData(reader.GetOutput())
-		geomFilter.Update()
-
-		print(case)
-		print(reader.GetOutput().GetNumberOfCells(), geomFilter.GetOutput().GetNumberOfCells())
-
 		# scale up the CFD result
 		transform = vtk.vtkTransform()
 		transform.Scale(1000,1000,1000)
 
-		transformFilter = vtk.vtkTransformPolyDataFilter()
 		transformFilter = vtk.vtkTransformFilter()
 		transformFilter.SetInputData(reader.GetOutput())
 		transformFilter.SetTransform(transform)
@@ -85,24 +76,24 @@ def OpenFOAM_result_to_csv(case_list,output_path):
 	appendFilter.Update();
 
 	unstructuredGrid = vtk.vtkUnstructuredGrid();
-	unstructuredGrid.ShallowCopy(reader.GetOutput())
+	unstructuredGrid.ShallowCopy(appendFilter.GetOutput())
 
-	print("transform filter: ",transformFilter.GetOutput().GetNumberOfCells())
-	os.makedirs(os.path.basename(output_path),exist_ok=True)
+	# print("transform filter: ",transformFilter.GetOutput().GetNumberOfCells())
+	# os.makedirs(os.path.basename(output_path),exist_ok=True)
 
-	writer = vtk.vtkXMLUnstructuredGridWriter()
-	writer.SetFileName(output_path)
-	writer.SetInputData(unstructuredGrid)
-	writer.Update()
-
-	# table = vtk.vtkDataObjectToTable()
-	# table.SetInputData(averageFilter.GetOutput())
-	# table.Update()
-	# table.GetOutput().AddColumn(averageFilter.GetOutput().GetPoints().GetData())
-	# table.Update()
-
-	# writer = vtk.vtkDelimitedTextWriter()
-	# writer.SetInputConnection(table.GetOutputPort())
+	# writer = vtk.vtkXMLUnstructuredGridWriter()
 	# writer.SetFileName(output_path)
+	# writer.SetInputData(unstructuredGrid)
 	# writer.Update()
-	# writer.Write()
+
+	table = vtk.vtkDataObjectToTable()
+	table.SetInputData(averageFilter.GetOutput())
+	table.Update()
+	table.GetOutput().AddColumn(averageFilter.GetOutput().GetPoints().GetData())
+	table.Update()
+
+	writer = vtk.vtkDelimitedTextWriter()
+	writer.SetInputConnection(table.GetOutputPort())
+	writer.SetFileName(output_path)
+	writer.Update()
+	writer.Write()

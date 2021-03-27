@@ -8,3 +8,22 @@ We will need following additional packages to fulfill the ICAD running environme
 ```bash
 pip install trimesh vtk tqdm
 ```
+
+## Data Hierarchy
+Place the dataset in arbitrary folder with following folder hierarchy
+
+
+## Configuration File
+
+
+## Training
+
+Run the following command to start training
+```bash
+bash all_run.py
+```
+
+### Tensorboard
+```bash
+python all_run.py --run_mode=plot_data
+```
