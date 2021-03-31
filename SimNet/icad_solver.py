@@ -16,11 +16,14 @@ from simnet.PDES.navier_stokes import IntegralContinuity, NavierStokes
 from simnet.controller import SimNetController
 from simnet.csv_utils.csv_rw import csv_to_dict
 
-nu = 1
+# nu = 0.025
 rho = 1
+nu = 3.365*1e-6
+# rho = 1040
 scale = 0.4
-# inlet_vel = 32.53 *1e-2
-inlet_vel = 1.5
+inlet_vel = 32.53 *1e-2
+# inlet_vel = 1.5
+continuity_unit = 2.5
 mapping = {'Points:0': 'x', 'Points:1': 'y', 'Points:2': 'z', 'U_average:0': 'u', 'U_average:1': 'v', 'U_average:2': 'w', 'p_average': 'p'}
 
 # inlet velocity profile
@@ -32,7 +35,6 @@ def circular_parabola(x, y, z, center, normal, radius, max_vel):
 	distance = sqrt(centered_x**2 + centered_y**2 + centered_z**2)
 	parabola = max_vel*Max((1 - (distance/radius)**2), 0)
 
-	print(parabola)
 	return normal[0]*parabola, normal[1]*parabola, normal[2]*parabola
 
 def circular_constant(x, y, z, center, normal, radius,vel):
@@ -104,27 +106,28 @@ class ICADTrain(TrainDomain):
 		noslip_mesh = Mesh.from_stl(os.path.join("stl_files",domain["vessel"]["filename"]), airtight=False)
 		print("{}: Reading vessel surface complete".format(datetime.datetime.now()))
 
-		# integral_mesh = Mesh.from_stl(point_path + 'aneurysm_integral.stl', airtight=False)
+		integral_mesh = Mesh.from_stl(os.path.join("stl_files","domain_integral.stl"), airtight=False)
+		print("{}: Reading integral domain complete".format(datetime.datetime.now()))
+
 		interior_mesh = Mesh.from_stl(os.path.join("stl_files",domain["domain"]["filename"]))
 		print("{}: Reading interior surface complete".format(datetime.datetime.now()))
 
 		# normalize mesh
 		center = (
-			(inlet_mesh.bounds()["x"][0]+inlet_mesh.bounds()["x"][1])/2, 
-			(inlet_mesh.bounds()["y"][0]+inlet_mesh.bounds()["y"][1])/2,
-			(inlet_mesh.bounds()["z"][0]+inlet_mesh.bounds()["z"][1])/2
+			(interior_mesh.bounds()["x"][0]+interior_mesh.bounds()["x"][1])/2, 
+			(interior_mesh.bounds()["y"][0]+interior_mesh.bounds()["y"][1])/2,
+			(interior_mesh.bounds()["z"][0]+interior_mesh.bounds()["z"][1])/2
 			)
-		print(center,center[0],center[1],center[2])
 		print("Mesh center: ({:.4f}, {:.4f}, {:.4f})".format(center[0],center[1],center[2]))
 		normalize_mesh(inlet_mesh, center, scale)
 
 		for outlet_mesh in outlet_meshes:
 			normalize_mesh(outlet_mesh, center, scale)
 		normalize_mesh(noslip_mesh, center, scale)
-		# normalize_mesh(integral_mesh, center, scale)
+		normalize_mesh(integral_mesh, center, scale)
 		normalize_mesh(interior_mesh, center, scale)
 
-		inlet_center = (inlet_center[0]-center[0],inlet_center[1]-center[1],inlet_center[2]-center[2])
+		inlet_center = ((inlet_center[0]-center[0])*scale,(inlet_center[1]-center[1])*scale,(inlet_center[2]-center[2])*scale)
 
 		print("inlet center: ",inlet_center)
 
@@ -145,7 +148,7 @@ class ICADTrain(TrainDomain):
 		# 	center=inlet_center,
 		# 	normal=inlet_normal,
 		# 	radius=inlet_radius*scale,
-		# 	max_vel=inlet_vel
+		# 	vel=inlet_vel
 		# 	)
 		inlet = inlet_mesh.boundary_bc(outvar_sympy={'u': u, 'v': v, 'w': w},batch_size_per_area=256)
 		self.add(inlet, name="Inlet")
@@ -156,7 +159,7 @@ class ICADTrain(TrainDomain):
 			self.add(outlet, name="Outlet_" + str(i))
 
 		# Noslip
-		noslip = noslip_mesh.boundary_bc(outvar_sympy={'u': 0, 'v': 0, 'w': 0},batch_size_per_area=32)
+		noslip = noslip_mesh.boundary_bc(outvar_sympy={'u': 0, 'v': 0, 'w': 0}, batch_size_per_area=32)
 		self.add(noslip, name="Noslip")
 
 		# Interior
@@ -171,16 +174,22 @@ class ICADTrain(TrainDomain):
 
 		# Integral Continuity for outlets
 		for i, outlet_mesh in enumerate(outlet_meshes):
-			ic = outlet_mesh.boundary_bc(outvar_sympy={'integral_continuity': 2.540},
+			ic = outlet_mesh.boundary_bc(outvar_sympy={'integral_continuity': -continuity_unit*(outlets[i]["radius"]/inlet_radius)**2},
 				lambda_sympy={'lambda_integral_continuity': 0.1},
 				batch_size_per_area=128)
 			self.add(ic, name="IntegralContinuity_" + str(i))
 
-		# Integral Continuity for in;et
-		ic_inlet = inlet_mesh.boundary_bc(outvar_sympy={'integral_continuity': -2.540*len(outlet_meshes)},
-			lambda_sympy={'lambda_integral_continuity': 0.1},
-			batch_size_per_area=128)
-		self.add(ic_inlet, name="IntegralContinuity_inlet")
+		# # Integral Continuity for inlet
+		# ic_inlet = inlet_mesh.boundary_bc(outvar_sympy={'integral_continuity': -continuity_unit},
+		# 	lambda_sympy={'lambda_integral_continuity': 0.1},
+		# 	batch_size_per_area=128)
+		# self.add(ic_inlet, name="IntegralContinuity_inlet")
+
+		# # Integral Continuity for integral domain
+		# ic_inlet = integral_mesh.boundary_bc(outvar_sympy={'integral_continuity': continuity_unit},
+		# 	lambda_sympy={'lambda_integral_continuity': 0.1},
+		# 	batch_size_per_area=128)
+		# self.add(ic_inlet, name="IntegralContinuity_custom")
 
 	@classmethod
 	def add_options(cls,group):
@@ -195,7 +204,7 @@ openfoam_var = csv_to_dict('./openfoam/average.csv', mapping)
 print("{}: Loading validation CSV file complete".format(datetime.datetime.now()))
 openfoam_invar = {key: value for key, value in openfoam_var.items() if key in ['x', 'y', 'z']}
 openfoam_outvar = {key: value for key, value in openfoam_var.items() if key in ['u', 'v', 'w', 'p']}
-openfoam_invar = normalize_invar(openfoam_invar, (-43.3838996887207, -40.659751892089844, -56.53300094604492), scale, dims=3)
+openfoam_invar = normalize_invar(openfoam_invar, (-31.8891, -35.6526, -43.7137), scale, dims=3)
 
 class ICADVal(ValidationDomain):
 	def __init__(self, **config):
@@ -232,6 +241,8 @@ class ICADSolver(Solver):
 		defaults.update({
 			'dataset_config': './domain/domain.json',
 			'network_dir': './network_checkpoint',
+			# 'start_lr': 1e-2,
+			'rec_results_freq': 100,
 			'rec_results_cpu': True,
 			'max_steps': 1500000,
 			'decay_steps': 15000,
