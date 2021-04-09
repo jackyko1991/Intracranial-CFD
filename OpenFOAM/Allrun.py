@@ -455,11 +455,12 @@ def run_case(case_dir, output_vtk=False, parallel=True, cores=4):
 def main():
 	data_dir = "/mnt/DIIR-JK-NAS/data/intracranial"
 	sub_data_dirs = [
-		"data_ESASIS_followup/medical",
-		"data_ESASIS_followup/stent",
-		"data_ESASIS_no_stenting",
-		"data_surgery",
-		"data_wingspan"
+		# "data_ESASIS_followup/medical",
+		# "data_ESASIS_followup/stent",
+		# "data_ESASIS_no_stenting",
+		# "data_surgery",
+		# "data_wingspan",
+		"data_sample"
 		]
 
 	# data_dir = "/mnt/DIIR-JK-NAS/data/intracranial/data_30_30"
@@ -469,11 +470,11 @@ def main():
 	phases = ["baseline"]
 
 	for sub_data_dir in sub_data_dirs:
-		# datalist = os.listdir(os.path.join(data_dir,sub_data_dir))
-		datalist = [
-		 	"089",
-		 	"133",
-		 	]
+		datalist = os.listdir(os.path.join(data_dir,sub_data_dir))
+		# datalist = [
+		#  	"089",
+		#  	"133",
+		#  	]
 		
 		pbar = tqdm(datalist)
 

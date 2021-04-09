@@ -21,14 +21,14 @@ rho = 1
 nu = 3.365*1e-6
 # rho = 1040
 scale = 0.4
+# scale = 0.1
 inlet_vel = 32.53 *1e-2
 # inlet_vel = 1.5
-continuity_unit = 1
-continuity = True
+continuity_unit = 2.5
 mapping = {'Points:0': 'x', 'Points:1': 'y', 'Points:2': 'z', 'U_average:0': 'u', 'U_average:1': 'v', 'U_average:2': 'w', 'p_average': 'p'}
+continuity = False
+inlet_profile = "constant" #constant, parabolic
 batch_size_per_area_boundary = 256
-copy_files = True
-clean_workspace = False
 
 # inlet velocity profile
 def circular_parabola(x, y, z, center, normal, radius, max_vel):
@@ -102,27 +102,9 @@ class ICADTrain(TrainDomain):
 		print("{}: Reading inlet surface complete".format(datetime.datetime.now()))
 		outlet_meshes = []
 
-		appendFilter = vtk.vtkAppendPolyData()
-		
 		for outlet in outlets:
-			reader = vtk.vtkSTLReader()
-			reader.SetFileName(os.path.join("stl_files",outlet["stl"]))
-			reader.Update()
-			appendFilter.AddInputData(reader.GetOutput())
-
-		appendFilter.Update()
-
-		writer = vtk.vtkSTLWriter()
-		writer.SetFileName("stl_files/outlet_combined.stl")
-		writer.SetInputData(appendFilter.GetOutput())
-		writer.Update()
-
-		outlet_mesh = Mesh.from_stl("stl_files/outlet_combined.stl", airtight=False)
-		outlet_meshes.append(outlet_mesh)
-
-		# for outlet in outlets:
-		# 	outlet_mesh = Mesh.from_stl(os.path.join("stl_files",outlet["stl"]), airtight=False)
-		# 	outlet_meshes.append(outlet_mesh)
+			outlet_mesh = Mesh.from_stl(os.path.join("stl_files",outlet["stl"]), airtight=False)
+			outlet_meshes.append(outlet_mesh)
 		print("{}: Reading outlet surface complete".format(datetime.datetime.now()))
 
 		noslip_mesh = Mesh.from_stl(os.path.join("stl_files",domain["vessel"]["filename"]), airtight=False)
@@ -130,8 +112,6 @@ class ICADTrain(TrainDomain):
 
 		if continuity:
 			integral_mesh = Mesh.from_stl(os.path.join("stl_files","domain_integral.stl"), airtight=False)
-			integral_mesh_2 = Mesh.from_stl(os.path.join("stl_files","domain_integral_2.stl"), airtight=False)
-			integral_mesh_3 = Mesh.from_stl(os.path.join("stl_files","domain_integral_3.stl"), airtight=False)
 			print("{}: Reading integral domain complete".format(datetime.datetime.now()))
 
 		interior_mesh = Mesh.from_stl(os.path.join("stl_files",domain["domain"]["filename"]))
@@ -151,8 +131,6 @@ class ICADTrain(TrainDomain):
 		normalize_mesh(noslip_mesh, center, scale)
 		if continuity:
 			normalize_mesh(integral_mesh, center, scale)
-			normalize_mesh(integral_mesh_2, center, scale)
-			normalize_mesh(integral_mesh_3, center, scale)
 		normalize_mesh(interior_mesh, center, scale)
 
 		inlet_center = ((inlet_center[0]-center[0])*scale,(inlet_center[1]-center[1])*scale,(inlet_center[2]-center[2])*scale)
@@ -160,24 +138,26 @@ class ICADTrain(TrainDomain):
 		print("inlet center: ",inlet_center)
 
 		# Inlet
-		# u, v, w = circular_parabola(
-		#  	Symbol('x'),
-		#  	Symbol('y'),
-		# 	Symbol('z'),
-		# 	center=inlet_center,
-		# 	normal=inlet_normal,
-		# 	radius=inlet_radius*scale,
-		# 	max_vel=inlet_vel
-		# 	)
-		u, v, w = circular_constant(
-		 	Symbol('x'),
-		 	Symbol('y'),
-			Symbol('z'),
-			center=inlet_center,
-			normal=inlet_normal,
-			radius=inlet_radius*scale,
-			vel=inlet_vel
-			)
+		if inlet_profile == "parabolic":
+			u, v, w = circular_parabola(
+			 	Symbol('x'),
+			 	Symbol('y'),
+				Symbol('z'),
+				center=inlet_center,
+				normal=inlet_normal,
+				radius=inlet_radius*scale,
+				max_vel=inlet_vel
+				)
+		elif inlet_profile == "constant":
+			u, v, w = circular_constant(
+			 	Symbol('x'),
+			 	Symbol('y'),
+				Symbol('z'),
+				center=inlet_center,
+				normal=inlet_normal,
+				radius=inlet_radius*scale,
+				vel=inlet_vel
+				)
 		inlet = inlet_mesh.boundary_bc(outvar_sympy={'u': u, 'v': v, 'w': w},batch_size_per_area=batch_size_per_area_boundary)
 		self.add(inlet, name="Inlet")
 
@@ -209,33 +189,18 @@ class ICADTrain(TrainDomain):
 			# 		batch_size_per_area=128)
 			# 	self.add(ic, name="IntegralContinuity_" + str(i))
 
-			# ic = outlet_mesh.boundary_bc(outvar_sympy={'integral_continuity': continuity_unit},
-			# 	lambda_sympy={'lambda_integral_continuity': 0.1},
-			# 	batch_size_per_area=128)
-			# self.add(ic, name="IntegralContinuity_outlet")
-
-			# # Integral Continuity for inlet
-			# ic_inlet = inlet_mesh.boundary_bc(outvar_sympy={'integral_continuity': continuity_unit},
-			# 	lambda_sympy={'lambda_integral_continuity': 0.1},
-			# 	batch_size_per_area=128)
-			# self.add(ic_inlet, name="IntegralContinuity_inlet")
+			# Integral Continuity for inlet
+			ic_inlet = inlet_mesh.boundary_bc(outvar_sympy={'integral_continuity': -continuity_unit},
+				lambda_sympy={'lambda_integral_continuity': 0.1},
+				batch_size_per_area=128)
+			self.add(ic_inlet, name="IntegralContinuity_inlet")
 
 			# Integral Continuity for integral domain
-			# plane direction correct? strange, direction still the same with negative direction
-			# ic_integral = integral_mesh.boundary_bc(outvar_sympy={'integral_continuity': continuity_unit},
-			# 	lambda_sympy={'lambda_integral_continuity': 0.1},
-			# 	batch_size_per_area=128)
-			# self.add(ic_integral, name="IntegralContinuity_custom")
-
-			ic_integral_2 = integral_mesh_2.boundary_bc(outvar_sympy={'integral_continuity': continuity_unit},
+			# plane direction correct?
+			ic_integral = integral_mesh.boundary_bc(outvar_sympy={'integral_continuity': -continuity_unit},
 				lambda_sympy={'lambda_integral_continuity': 0.1},
 				batch_size_per_area=128)
-			self.add(ic_integral_2, name="IntegralContinuity_custom_2")
-
-			ic_integral_3 = integral_mesh_3.boundary_bc(outvar_sympy={'integral_continuity': continuity_unit},
-				lambda_sympy={'lambda_integral_continuity': 0.1},
-				batch_size_per_area=128)
-			self.add(ic_integral_3, name="IntegralContinuity_custom_2")
+			self.add(ic_integral, name="IntegralContinuity_custom")
 
 	@classmethod
 	def add_options(cls,group):
@@ -244,21 +209,38 @@ class ICADTrain(TrainDomain):
 			type=str,
 			default='./dataset_config.json')
 
-# read validation data
-print("{}: Loading validation CSV file...".format(datetime.datetime.now()))
-openfoam_var = csv_to_dict('./openfoam/average.csv', mapping)
-print("{}: Loading validation CSV file complete".format(datetime.datetime.now()))
-openfoam_invar = {key: value for key, value in openfoam_var.items() if key in ['x', 'y', 'z']}
-openfoam_outvar = {key: value for key, value in openfoam_var.items() if key in ['u', 'v', 'w', 'p']}
-openfoam_invar = normalize_invar(openfoam_invar, (-31.8891, -35.6526, -43.7137), scale, dims=3)
-
 class ICADVal(ValidationDomain):
 	def __init__(self, **config):
 		super(ICADVal, self).__init__()
+		needed_config = ICADTrain.process_config(config)
+		self.__dict__.update(needed_config)
+
+		# load domain json
+		with open(config['config'].dataset_config) as f:
+			domain = json.load(f)
+
+		# read validation data
+		print("{}: Loading validation CSV file...".format(datetime.datetime.now()))
+		openfoam_var = csv_to_dict('./openfoam/openfoam_result.csv', mapping)
+		print("{}: Loading validation CSV file complete".format(datetime.datetime.now()))
+		openfoam_invar = {key: value for key, value in openfoam_var.items() if key in ['x', 'y', 'z']}
+		openfoam_outvar = {key: value for key, value in openfoam_var.items() if key in ['u', 'v', 'w', 'p']}
+
+		# normalize openfoam result
+		interior_mesh = Mesh.from_stl(os.path.join("stl_files",domain["domain"]["filename"]))
+		print("{}: Reading interior surface complete".format(datetime.datetime.now()))
+
+		# normalize mesh
+		center = (
+			(interior_mesh.bounds()["x"][0]+interior_mesh.bounds()["x"][1])/2, 
+			(interior_mesh.bounds()["y"][0]+interior_mesh.bounds()["y"][1])/2,
+			(interior_mesh.bounds()["z"][0]+interior_mesh.bounds()["z"][1])/2
+			)
+
+		openfoam_invar = normalize_invar(openfoam_invar, center, scale, dims=3)
+
 		val = Validation.from_numpy(openfoam_invar, openfoam_outvar)
 		self.add(val, name='Val')
-		print(config)
-		exit()
 
 # class ICADMonitor(MonitorDomain):
 # 	def __init__(self, **config):
@@ -299,58 +281,7 @@ class ICADSolver(Solver):
 			'decay_steps': 15000,
 			})
 
-def run_case(case_dir, output_vtk=False):
-	startTime = datetime.datetime.now()
-
-	tqdm.write("********************************* SimNet CFD Operation *********************************")
-	tqdm.write("{}: Execute SimNet CFD simulation on directory: {}".format(datetime.datetime.now(),case_dir))
-
-	if copy_files:
-		tqdm.write("{}: STL domain merging...".format(datetime.datetime.now()))
-		stl_concat(os.path.join(case_dir,"domain.json"))
-
-		# copy surface from case directory
-		tqdm.write("{}: Copying necessary files...".format(datetime.datetime.now()))
-		source_file = os.path.join(case_dir,"domain_capped.stl")
-		target_file = "./stl_files/domain_capped.stl"
-		shutil.copy(source_file, target_file)
-
-		source_file = os.path.join(case_dir,"domain.json")
-		target_file = "./domain/domain.json"
-		shutil.copy(source_file, target_file)
-
-		timepoints = range(1600,2100,100)
-		openfoam_results = [os.path.join(case_dir,"CFD_OpenFOAM","VTK","OpenFOAM_" + str(timepoint) + ".vtk") for timepoint in timepoints]
-		openfoam_result_csv_path = os.path.join(case_dir,"CFD_OpenFOAM_result","average.csv")
-
-		OpenFOAM_result_to_csv(openfoam_results,openfoam_result_csv_path,vtu_output=True)
-		source_file = openfoam_result_csv_path
-		target_file = "./openfoam/openfoam_result.csv"
-		shutil.copy(source_file, target_file)
-
-		# stl surfaces
-		if clean_workspace:
-			shutil.rmtree("stl_files")
-
-		with open("./domain/domain.json") as f:
-			domain = json.load(f)
-
-		stl_files = [domain["domain"]["filename"],domain["vessel"]["filename"]]
-
-		for key, value in domain.items():
-			if "type" in value:
-				if value["type"] in ["inlet", "outlet"]:
-					stl_files.append(value["filename"])
-
-		for file in stl_files:
-			if os.path.exists(os.path.join(case_dir,file)):
-				source_file = os.path.join(case_dir,file)
-				target_file = os.path.join("stl_files",file)
-				shutil.copy(source_file,target_file)
-			else:
-				print("STL file not exists:{}".format(os.path.join(case_dir,file)))
-				return
-
+if __name__=="__main__":
 	# simnet controller
 	ctr = SimNetController(ICADSolver)
 	ctr.run()

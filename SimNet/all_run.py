@@ -6,11 +6,12 @@ def main():
 	data_dir = "/mnt/DIIR-JK-NAS/data/intracranial"
 	# data_dir = "Z:/data/intracranial"
 	sub_data_dirs = [
-		"data_ESASIS_followup/medical",
-		"data_ESASIS_followup/stent",
-		"data_ESASIS_no_stenting",
-		"data_surgery",
-		"data_wingspan"
+		# "data_ESASIS_followup/medical",
+		# "data_ESASIS_followup/stent",
+		# "data_ESASIS_no_stenting",
+		# "data_surgery",
+		# "data_wingspan",
+		"data_sample"
 		]
 
 	phases = ["baseline"]

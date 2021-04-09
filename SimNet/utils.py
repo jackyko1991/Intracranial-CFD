@@ -49,7 +49,7 @@ def stl_concat(domain_json):
 
 	fout.close()
 
-def OpenFOAM_result_to_csv(case_list,output_path):
+def OpenFOAM_result_to_csv(case_list,csv_output_path,vtu_output=False):
 	# average filter
 	averageFilter = vtk.vtkTemporalStatistics()
 
@@ -78,13 +78,7 @@ def OpenFOAM_result_to_csv(case_list,output_path):
 	unstructuredGrid = vtk.vtkUnstructuredGrid();
 	unstructuredGrid.ShallowCopy(appendFilter.GetOutput())
 
-	# print("transform filter: ",transformFilter.GetOutput().GetNumberOfCells())
-	# os.makedirs(os.path.basename(output_path),exist_ok=True)
-
-	# writer = vtk.vtkXMLUnstructuredGridWriter()
-	# writer.SetFileName(output_path)
-	# writer.SetInputData(unstructuredGrid)
-	# writer.Update()
+	os.makedirs(os.path.dirname(output_path),exist_ok=True)
 
 	table = vtk.vtkDataObjectToTable()
 	table.SetInputData(averageFilter.GetOutput())
@@ -92,8 +86,17 @@ def OpenFOAM_result_to_csv(case_list,output_path):
 	table.GetOutput().AddColumn(averageFilter.GetOutput().GetPoints().GetData())
 	table.Update()
 
+	if not os.path.exists(os.path.dirname(output_path)):
+		os.makedirs(os.path.dirname(output_path))
+
 	writer = vtk.vtkDelimitedTextWriter()
 	writer.SetInputConnection(table.GetOutputPort())
 	writer.SetFileName(output_path)
 	writer.Update()
 	writer.Write()
+
+	if vtu_output:
+		writer = vtk.vtkXMLUnstructuredGridWriter()
+		writer.SetFileName(os.path.join(os.path.dirname(output_path),os.path.basename(output_path).split(".")[0]+".vtu"))
+		writer.SetInputData(unstructuredGrid)
+		writer.Update()
