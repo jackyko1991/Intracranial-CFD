@@ -1,3 +1,6 @@
 [submodule "cxx/Vessel-Centerline-Extraction"]
 	path = cxx/Vessel-Centerline-Extraction
 	url = https://github.com/jackyko1991/Vessel-Centerline-Extraction.git
+[submodule "SimNet-Vessels"]
+	path = SimNet-Vessels
+	url = git@github.com:jackyko1991/SimNet-Vessels.git
