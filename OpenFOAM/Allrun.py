@@ -7,6 +7,7 @@ import datetime
 import json
 from tqdm import tqdm
 import trimesh
+import csv
 
 def edit_blockMeshDict(dictionary, stl, edge_buffer=2):
 	try:
@@ -189,7 +190,7 @@ def edit_snappyHexMeshDict(dictionary, domain_json):
 		regions = {"vessel":{"name": "vessel"}}
 		for key, value in domain_dict.items():
 			try: 
-				if value["type"] == "Stenosis":
+				if value["type"] in ["Stenosis","DoS_Ref","Bifurcation","Others"]:
 					continue
 				else:
 					regions.update({key
@@ -204,7 +205,7 @@ def edit_snappyHexMeshDict(dictionary, domain_json):
 
 		for key, value in domain_dict.items():
 			try:
-				if value["type"] == "inlet" or value["type"] == "outlet":
+				if value["type"] in ["inlet","outlet"]:
 					regions.update({key: {"level": "(4 4)", "patchInfo":{"type":"patch"}}})
 				else:
 					continue
@@ -256,7 +257,7 @@ def stl_concat(domain_json):
 
 	for key, value in domain_dict.items():
 		try:
-			if value["type"] == "Stenosis":
+			if value["type"] in ["Stenosis","DoS_Ref","Bifurcation","Others"]:
 				continue
 			else:
 				# check nan and correct
@@ -454,13 +455,15 @@ def run_case(case_dir, output_vtk=False, parallel=True, cores=4):
 
 def main():
 	data_dir = "/mnt/DIIR-JK-NAS/data/intracranial"
+	use_run_list = True
+
 	sub_data_dirs = [
 		# "data_ESASIS_followup/medical",
-		# "data_ESASIS_followup/stent",
-		# "data_ESASIS_no_stenting",
-		# "data_surgery",
+		"data_ESASIS_followup/stent",
+		#"data_ESASIS_no_stenting",
+		#"data_surgery",
 		# "data_wingspan",
-		"data_sample"
+		#"data_aneurysm_with_stenosis"
 		]
 
 	# data_dir = "/mnt/DIIR-JK-NAS/data/intracranial/data_30_30"
@@ -469,17 +472,31 @@ def main():
 	# phases = ["baseline", "baseline-post", "12months", "followup"]
 	phases = ["baseline"]
 
+	if use_run_list:
+		run_list = "./run_list.csv"
+		with open(run_list, newline='') as csvfile:
+			reader = csv.reader(csvfile)
+			run_cases = [l[0] for l in reader]
+
+	ignore_cases = [
+		"001",
+		"002",
+		"057",
+		]
+
 	for sub_data_dir in sub_data_dirs:
 		datalist = os.listdir(os.path.join(data_dir,sub_data_dir))
-		# datalist = [
-		#  	"089",
-		#  	"133",
-		#  	]
-		
 		pbar = tqdm(datalist)
 
 		for case in pbar:
 			pbar.set_description(case)
+
+			if use_run_list:
+				if not case in run_cases:
+					continue
+
+			if case in ignore_cases:
+				continue
 
 			for phase in phases:
 				if not os.path.exists(os.path.join(data_dir,sub_data_dir,case,phase)):
