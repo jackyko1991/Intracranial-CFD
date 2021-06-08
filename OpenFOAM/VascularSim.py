@@ -7,7 +7,8 @@ import datetime
 import json
 from tqdm import tqdm
 import trimesh
-import csv
+import tempfile
+
 
 def edit_blockMeshDict(dictionary, stl, edge_buffer=2):
 	try:
@@ -286,11 +287,11 @@ def run_case(case_dir, output_vtk=False, parallel=True, cores=4):
 	# copy surface from case directory
 	tqdm.write("{}: Copying necessary files...".format(datetime.datetime.now()))
 	source_file = os.path.join(case_dir,"domain_capped.stl")
-	target_file = "./constant/triSurface/domain_capped.stl"
+	target_file = os.path.join("./","constant","triSurface","domain_capped.stl")
 	shutil.copy(source_file, target_file)
 
 	source_file = os.path.join(case_dir,"domain.json")
-	target_file = "./constant/domain.json"
+	target_file = os.path.join("./","constant","domain.json")
 	shutil.copy(source_file, target_file)
 
 	# clean workspace
@@ -452,65 +453,3 @@ def run_case(case_dir, output_vtk=False, parallel=True, cores=4):
 		shutil.copytree(src_folder,tgt_folder)
 
 	tqdm.write("{}: CFD operation on {} complete".format(datetime.datetime.now(),case_dir))
-
-def main():
-	data_dir = "/mnt/DIIR-JK-NAS/data/intracranial"
-	use_run_list = True
-
-	sub_data_dirs = [
-		# "data_ESASIS_followup/medical",
-		"data_ESASIS_followup/stent",
-		#"data_ESASIS_no_stenting",
-		#"data_surgery",
-		# "data_wingspan",
-		#"data_aneurysm_with_stenosis"
-		]
-
-	# data_dir = "/mnt/DIIR-JK-NAS/data/intracranial/data_30_30"
-	# sub_data_dirs = ["surgery"]
-
-	# phases = ["baseline", "baseline-post", "12months", "followup"]
-	phases = ["baseline"]
-
-	if use_run_list:
-		run_list = "./run_list.csv"
-		with open(run_list, newline='') as csvfile:
-			reader = csv.reader(csvfile)
-			run_cases = [l[0] for l in reader]
-
-	ignore_cases = [
-		"001",
-		"002",
-		"057",
-		]
-
-	for sub_data_dir in sub_data_dirs:
-		datalist = os.listdir(os.path.join(data_dir,sub_data_dir))
-		pbar = tqdm(datalist)
-
-		for case in pbar:
-			pbar.set_description(case)
-
-			if use_run_list:
-				if not case in run_cases:
-					continue
-
-			if case in ignore_cases:
-				continue
-
-			for phase in phases:
-				if not os.path.exists(os.path.join(data_dir,sub_data_dir,case,phase)):
-					continue
-
-				if not os.path.exists(os.path.join(data_dir,sub_data_dir,case,phase,"domain.json")):
-					continue
-
-				#if os.path.exists(os.path.join(data_dir,sub_data_dir,case,phase,"CFD_OpenFOAM")):
-				#	continue
-
-				run_case(os.path.join(data_dir,sub_data_dir,case,phase),output_vtk=True, parallel=True, cores=8)
-
-			# run_case(os.path.join(data_dir,sub_data_dir,case),output_vtk=True, parallel=True, cores=8)
-
-if __name__ == "__main__":
-	main()
