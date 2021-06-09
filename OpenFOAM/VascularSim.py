@@ -9,8 +9,7 @@ from tqdm import tqdm
 import trimesh
 import tempfile
 
-
-def edit_blockMeshDict(dictionary, stl, edge_buffer=2):
+def edit_blockMeshDict(dictionary, stl, cellNumber=40, edge_buffer=2):
 	try:
 		tqdm.write("{}: Editing blockMeshDict: {}".format(datetime.datetime.now(),dictionary))
 		blockMeshDict = ParsedBlockMeshDict(dictionary)
@@ -29,8 +28,6 @@ def edit_blockMeshDict(dictionary, stl, edge_buffer=2):
 		blockMeshDict["zmin"] =  bounds[4]-edge_buffer;
 		blockMeshDict["zmax"] =  bounds[5]+edge_buffer;
 
-		cellNumber = 40
-
 		blocks = blockMeshDict["blocks"]
 		blocks[2] = '({} {} {})'.format(cellNumber,cellNumber,cellNumber)
 		blockMeshDict["blocks"] = blocks
@@ -44,7 +41,7 @@ def edit_blockMeshDict(dictionary, stl, edge_buffer=2):
 		return 0
 
 	except IOError:
-		tqdm.write(blockMeshDict_file, "does not exist")
+		tqdm.write(blockMeshDict_file, " does not exist")
 		return 1
 
 def edit_decompseParDict(dictionary, cores=4):
@@ -80,7 +77,7 @@ def edit_decompseParDict(dictionary, cores=4):
 			tqdm.write(decompseParDict)
 
 	except IOError:
-		tqdm.write(dictionary, "does not exist")
+		tqdm.write(dictionary, " does not exist")
 		return 1	
 
 def edit_velocity(dictionary, domain_json, velocity=1):
@@ -129,7 +126,7 @@ def edit_velocity(dictionary, domain_json, velocity=1):
 			tqdm.write(velocityDict)
 
 	except IOError:
-		tqdm.write(dictionary, "does not exist")
+		tqdm.write(dictionary, " does not exist")
 		return 1
 
 def edit_pressure(dictionary, domian_json, pressure=0):
@@ -173,7 +170,7 @@ def edit_pressure(dictionary, domian_json, pressure=0):
 			tqdm.write(pressureDict)
 
 	except IOError:
-		tqdm.write(dictionary, "does not exist")
+		tqdm.write(dictionary, " does not exist")
 		return 1
 
 def edit_snappyHexMeshDict(dictionary, domain_json):
@@ -228,7 +225,7 @@ def edit_snappyHexMeshDict(dictionary, domain_json):
 			tqdm.write(snappyHexMeshDict)
 
 	except IOError:
-		tqdm.write(snappyHexMeshDict, "does not exist")
+		tqdm.write(dictionary + " does not exist")
 		return 1
 
 def stl_concat(domain_json):
@@ -275,7 +272,7 @@ def stl_concat(domain_json):
 
 	fout.close()
 
-def run_case(case_dir, output_vtk=False, parallel=True, cores=4):
+def run_case(case_dir, output_vtk=False, parallel=True, cores=4, cellNumber=40):
 	startTime = datetime.datetime.now()
 
 	tqdm.write("********************************* OpenFOAM CFD Operation *********************************")
@@ -284,139 +281,181 @@ def run_case(case_dir, output_vtk=False, parallel=True, cores=4):
 	tqdm.write("{}: STL domain merging...".format(datetime.datetime.now()))
 	stl_concat(os.path.join(case_dir,"domain.json"))
 
+	# create temporary working directory
+	tmp_dir = tempfile.TemporaryDirectory(prefix="tmp_",dir="./")
+
 	# copy surface from case directory
 	tqdm.write("{}: Copying necessary files...".format(datetime.datetime.now()))
 	source_file = os.path.join(case_dir,"domain_capped.stl")
-	target_file = os.path.join("./","constant","triSurface","domain_capped.stl")
-	shutil.copy(source_file, target_file)
+	surface_file = os.path.join(tmp_dir.name,"constant","triSurface","domain_capped.stl")
+	if not os.path.exists(os.path.dirname(surface_file)):
+		os.makedirs(os.path.dirname(surface_file))
+	shutil.copy(source_file, surface_file)
 
 	source_file = os.path.join(case_dir,"domain.json")
-	target_file = os.path.join("./","constant","domain.json")
-	shutil.copy(source_file, target_file)
+	domain_file = os.path.join(tmp_dir.name,"constant","domain.json")
+	if not os.path.exists(os.path.dirname(domain_file)):
+		os.makedirs(os.path.dirname(domain_file))
+	shutil.copy(source_file, domain_file)
 
-	# clean workspace
-	tqdm.write("{}: Cleaning workspace...".format(datetime.datetime.now()))
-	if os.path.exists("./0/vorticity"):
-		os.remove("./0/vorticity")
-	if os.path.exists("./0/wallShearStress"):
-		os.remove("./0/wallShearStress")
-	if os.path.exists("./constant/polyMesh"):
-		shutil.rmtree("./constant/polyMesh")
-	if os.path.exists("./constant/extendedFeatureEdgeMesh"):
-		shutil.rmtree("./constant/extendedFeatureEdgeMesh")
-	for folder in os.listdir("./"):
-		try:
-			if folder == "0":
-				continue
-			is_cfd_result = float(folder)
+	# copy necessary dict to tmp dir
+	source_files = [
+		"./constant/transportProperties",
+		"./constant/turbulenceProperties",
+		"./system/blockMeshDict",
+		"./system/controlDict",
+		"./system/surfaceFeaturesDict",
+		"./system/decomposeParDict",
+		"./system/snappyHexMeshDict",
+		"./system/fvSchemes",
+		"./system/fvSolution",
+		"./system/meshQualityDict",
+		"./0/U",
+		"./0/p",
+	]
 
-			shutil.rmtree(os.path.join("./",folder))
-		except ValueError:
-			continue
+	for source_file in source_files:
+		target_file = os.path.join(tmp_dir.name,source_file)
+		if not os.path.exists(os.path.dirname(target_file)):
+			os.makedirs(os.path.dirname(target_file))
+		shutil.copy(source_file, target_file)
 
 	# blockMesh
-	blockMeshDict_file = "./system/blockMeshDict"
-	result = edit_blockMeshDict(blockMeshDict_file, "./constant/triSurface/domain_capped.stl")
+	blockMeshDict_file = os.path.join(tmp_dir.name,"system","blockMeshDict")
+	result = edit_blockMeshDict(blockMeshDict_file, surface_file,cellNumber=cellNumber)
 
 	if result == 1:
 		tqdm.write("blockMeshDict edit fail, case abort")
 		return
 
 	# create log dir
-	os.makedirs("./log",exist_ok=True)
+	os.makedirs(os.path.join(tmp_dir.name,"log"),exist_ok=True)
 
 	tqdm.write("{}: Execute blockMesh...".format(datetime.datetime.now()))
-	os.system("blockMesh > ./log/blockMesh.log")
+	os.system("blockMesh -case {} > {}".format(
+		tmp_dir.name,
+		os.path.join(tmp_dir.name,"log","blockMesh.log")))
 
 	# extract surface features
-	tqdm.write("{}: Execute surfaceFeatureExtract...".format(datetime.datetime.now()))
-	os.system("surfaceFeatureExtract > ./log/surfaceFeatureExtract.log")
+	tqdm.write("{}: Execute surfaceFeatures...".format(datetime.datetime.now()))
+	os.system("surfaceFeatures -case {} > {}".format(
+		tmp_dir.name,
+		os.path.join(tmp_dir.name,"log","surfaceFeatures.log")))
 
 	if parallel:
-		# remove all previously defined parallel outputs
-		for folder in os.listdir("./"):
-			if "processor" in folder:
-				shutil.rmtree(folder)
-
 		# decompose the mesh for multicore computation
-		edit_decompseParDict("./system/decomposeParDict", cores=cores)
+		edit_decompseParDict(os.path.join(tmp_dir.name,"system","decomposeParDict"), cores=cores)
 		tqdm.write("{}: Execute decompsePar...".format(datetime.datetime.now()))
-		os.system("decomposePar > ./log/decomposePar.log")
+		os.system("decomposePar -case {} > {}".format(
+			tmp_dir.name,
+			os.path.join(tmp_dir.name,"log","decomposePar.log")))
 
 		# need to edit snappyHexMesh file for meshing
-		edit_snappyHexMeshDict("./system/snappyHexMeshDict", "./constant/domain.json")
+		edit_snappyHexMeshDict(os.path.join(tmp_dir.name,"system","snappyHexMeshDict"), os.path.join(tmp_dir.name,"constant","domain.json"))
 		tqdm.write("{}: Execute snappyHexMesh in parallel...".format(datetime.datetime.now()))
-		os.system("foamJob -parallel -screen snappyHexMesh -overwrite > ./log/snappyHexMesh.log")
-		# os.system("foamJob -parallel snappyHexMesh -overwrite")
+		os.system("foamJob -parallel -screen snappyHexMesh -case {} -overwrite > {}".format(
+			tmp_dir.name,
+			os.path.join(tmp_dir.name,"log","snappyHexMesh.log")
+			))
 
 		# reconstruct mesh surface in parallel run
 		tqdm.write("{}: Reconstructing mesh from parallel run...".format(datetime.datetime.now()))
-		os.system("reconstructParMesh -latestTime -mergeTol 1E-06 -constant > ./log/reconstructParMesh.log")
-		os.system("reconstructPar -latestTime > ./log/reconstructPar.log")
+		os.system("reconstructParMesh -latestTime -mergeTol 1E-06 -constant -case {} > {}".format(
+			tmp_dir.name,
+			os.path.join(tmp_dir.name,"log","reconstructParMesh.log")
+			))
+		os.system("reconstructPar -latestTime -case {} > {}".format(
+			tmp_dir.name,
+			os.path.join(tmp_dir.name,"log","reconstructPar.log")
+			))
 
 		# remove all previously defined parallel outputs
-		for folder in os.listdir("./"):
+		for folder in os.listdir(tmp_dir.name):
 			if "processor" in folder:
-				shutil.rmtree(folder)
+				shutil.rmtree(os.path.join(tmp_dir.name,folder))
 
 		# boundary conditions
-		edit_velocity("./0/U", "./constant/domain.json", velocity=32.53)
-		edit_pressure("./0/p", "./constant/domain.json", pressure=0)
+		edit_velocity(os.path.join(tmp_dir.name,"0","U"), os.path.join(tmp_dir.name,"constant","domain.json"), velocity=32.53)
+		edit_pressure(os.path.join(tmp_dir.name,"0","p"), os.path.join(tmp_dir.name,"constant","domain.json"), pressure=0)
 
 		# decompose the mesh for multicore computation
 		edit_decompseParDict("./system/decomposeParDict", cores=cores)
 		tqdm.write("{}: Execute decompsePar...".format(datetime.datetime.now()))
-		os.system("decomposePar > ./log/decomposePar.log")
+		os.system("decomposePar -case {} > {}".format(
+			tmp_dir.name,
+			os.path.join(tmp_dir.name,"log","decomposePar.log")
+			))
 
 		# CFD 
 		# print("{}: Execute icoFoam in parallel...".format(datetime.datetime.now()))
 		# os.system("foamJob -parallel -screen icoFoam > ./log/icoFoam.log")
 		
 		tqdm.write("{}: Execute pisoFoam in parallel...".format(datetime.datetime.now()))
-		os.system("foamJob -parallel -screen pisoFoam > ./log/pisoFoam.log")
+		os.system("foamJob -parallel -screen pisoFoam -case {} > {}".format(
+			tmp_dir.name,
+			os.path.join(tmp_dir.name,"log","pisoFoam.log")
+			))
 
 		# reconstruct mesh surface in parallel run
 		tqdm.write("{}: Reconstructing mesh from parallel run...".format(datetime.datetime.now()))
-		os.system("reconstructParMesh -mergeTol 1E-06 -constant > ./log/reconstructParMesh.log")
-		os.system("reconstructPar > ./log/reconstructPar.log")
-
-		# remove all previously defined parallel outputs
-		for folder in os.listdir("./"):
-			if "processor" in folder:
-				shutil.rmtree(folder)
-
+		os.system("reconstructParMesh -mergeTol 1E-06 -constant -case {} > {}".format(
+			tmp_dir.name,
+			os.path.join(tmp_dir.name,"log","reconstructParMesh.log")
+			))
+		os.system("reconstructPar -case {} > {}".format(
+			tmp_dir.name,
+			os.path.join(tmp_dir.name,"log","reconstructPar.log")
+			))
 	else:
 		# need to edit snappyHexMesh file for meshing
-		edit_snappyHexMeshDict("./system/snappyHexMeshDict", "./constant/domain.json")
+		edit_snappyHexMeshDict(os.path.join(tmp_dir.name,"system","snappyHexMeshDict", os.path.join(tmp_dir.name,"constant","domain.json")))
 		tqdm.write("{}: Execute snappyHexMesh...".format(datetime.datetime.now()))
-		os.system("snappyHexMesh -overwrite > ./log/snappyHexMesh.log")
+		os.system("snappyHexMesh -overwrite -case {} > {}".format(
+			tmp_dir.name,
+			os.path.join(tmp_dir.name,"log","snappyHexMesh.log")
+			))
 
 		# run cfd
-		# need to edit initial velocity file
-		edit_velocity("./0/U", "./constant/domain.json", velocity=32.53)
+		# need to edit initial velocity and pressure file
+		edit_velocity(os.path.join(tmp_dir.name,"0","U"), os.path.join(tmp_dir.name,"constant","domain.json"), velocity=32.53)
+		edit_pressure(os.path.join(tmp_dir.name,"0","p"), os.path.join(tmp_dir.name,"constant","domain.json"), pressure=0)
+
 		# print("{}: Execute icoFoam...".format(datetime.datetime.now()))
 		# os.system("icoFoam > ./log/icoFoam.log")
 
 		tqdm.write("{}: Execute pisoFoam...".format(datetime.datetime.now()))
-		os.system("icoFoam > ./log/pisoFoam.log")
+		os.system("icoFoam -case {} > {}".format(
+			tmp_dir.name,
+			os.path.join(tmp_dir.name,"log","pisoFoam.log")
+			))
 
 	# post processing
 	tqdm.write("{}: Computing vorticity...".format(datetime.datetime.now()))
-	os.system("pisoFoam -postProcess -func vorticity > ./log/vorticity.log")
+	os.system("pisoFoam -postProcess -func vorticity -case {} > {}".format(
+		tmp_dir.name,
+		os.path.join(tmp_dir.name,"log","vorticity.log")
+		))
 
 	tqdm.write("{}: Computing wall shear stress...".format(datetime.datetime.now()))
-	os.system("pisoFoam -postProcess -func wallShearStress > ./log/wallShearStress.log")
+	os.system("pisoFoam -postProcess -func wallShearStress -case {} > {}".format(
+		tmp_dir.name,
+		os.path.join(tmp_dir.name,"log","wallShearStress.log")
+		))
 
 	# create OpenFOAM read fill for paraview
-	os.system("touch OpenFOAM.OpenFOAM")
+	os.system("touch ./{}/OpenFOAM.OpenFOAM".format(tmp_dir.name))
 
 	# output as vtk file
 	if output_vtk:
 		tqdm.write("Convert to VTK output")
-		os.system("foamToVTK > ./log/foamToVTK.log")
+		os.system("foamToVTK -case {}> {}".format(
+			tmp_dir.name,
+			os.path.join(tmp_dir.name,"log","foamToVTK.log")
+		))
+
 
 	endTime = datetime.datetime.now()
-	tqdm.write("{}: Auto CFD pipeline complete, time elapsed: {}s".format(datetime.datetime.now(),(endTime-startTime).total_seconds()))
+	tqdm.write("{}: Auto CFD pipeline complete, time elapsed: {:.2f}s".format(datetime.datetime.now(),(endTime-startTime).total_seconds()))
 
 	# copy result back to storage node
 	tqdm.write("{}: Copying result files...".format(datetime.datetime.now()))
@@ -425,30 +464,30 @@ def run_case(case_dir, output_vtk=False, parallel=True, cores=4):
 		shutil.rmtree(os.path.join(case_dir,"CFD_OpenFOAM"), ignore_errors=True)
 	os.makedirs(os.path.join(case_dir,"CFD_OpenFOAM"))
 
-	for folder in os.listdir("./"):
+	for folder in os.listdir(tmp_dir.name):
 		try:
 			is_cfd_result = float(folder)
 
-			src_folder = os.path.join("./",folder)
+			src_folder = os.path.join(tmp_dir.name,folder)
 			tgt_folder = os.path.join(case_dir,"CFD_OpenFOAM",folder)
 			shutil.copytree(src_folder,tgt_folder)
 		except ValueError:
 			continue
 
-	src_file = os.path.join("./","OpenFOAM.OpenFOAM")
+	src_file = os.path.join(tmp_dir.name,"OpenFOAM.OpenFOAM")
 	tgt_file = os.path.join(case_dir,"CFD_OpenFOAM","OpenFOAM.OpenFOAM")
 	shutil.copy(src_file,tgt_file)
 
-	src_folder = os.path.join("./","constant")
+	src_folder = os.path.join(tmp_dir.name,"constant")
 	tgt_folder = os.path.join(case_dir,"CFD_OpenFOAM","constant")
 	shutil.copytree(src_folder,tgt_folder)
 
-	src_folder = os.path.join("./","log")
+	src_folder = os.path.join(tmp_dir.name,"log")
 	tgt_folder = os.path.join(case_dir,"CFD_OpenFOAM","log")
 	shutil.copytree(src_folder,tgt_folder)
 
 	if output_vtk:
-		src_folder = os.path.join("./","VTK")
+		src_folder = os.path.join(tmp_dir.name,"VTK")
 		tgt_folder = os.path.join(case_dir,"CFD_OpenFOAM","VTK")
 		shutil.copytree(src_folder,tgt_folder)
 

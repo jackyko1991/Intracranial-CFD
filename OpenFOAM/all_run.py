@@ -1,14 +1,20 @@
 import os
 import shutil
-from PyFoam.RunDictionary.ParsedBlockMeshDict import ParsedBlockMeshDict
-from PyFoam.RunDictionary.ParsedParameterFile import ParsedParameterFile
-import vtk
+from multiprocessing import Pool
 import datetime
 import json
 from tqdm import tqdm
 import trimesh
 import csv
 from VascularSim import *
+import time
+from functools import partial
+
+def worker(name,a=1):
+	tqdm.write(str(a))
+	tqdm.write(name)
+	time.sleep(1)
+	return name
 
 def main():
 	data_dir = "/mnt/DIIR-JK-NAS/data/intracranial"
@@ -18,9 +24,9 @@ def main():
 		"data_ESASIS_followup/medical",
 		"data_ESASIS_followup/stent",
 		"data_ESASIS_no_stenting",
-		#"data_surgery",
+		"data_surgery",
 		"data_wingspan",
-		#"data_aneurysm_with_stenosis"
+		"data_aneurysm_with_stenosis"
 		]
 
 	# data_dir = "/mnt/DIIR-JK-NAS/data/intracranial/data_30_30"
@@ -39,6 +45,8 @@ def main():
 		"002",
 		"057",
 		]
+
+	ensembled_case_list = []
 
 	for sub_data_dir in sub_data_dirs:
 		datalist = os.listdir(os.path.join(data_dir,sub_data_dir))
@@ -64,9 +72,16 @@ def main():
 				#if os.path.exists(os.path.join(data_dir,sub_data_dir,case,phase,"CFD_OpenFOAM")):
 				#	continue
 
-				run_case(os.path.join(data_dir,sub_data_dir,case,phase),output_vtk=True, parallel=True, cores=8)
+				ensembled_case_list.append(os.path.join(data_dir,sub_data_dir,case,phase))
 
-			# run_case(os.path.join(data_dir,sub_data_dir,case),output_vtk=True, parallel=True, cores=8)
+	# create thread pool
+	pool_size = 5
+
+	kwargs = {"output_vtk": True, "parallel":True, "cores":8, "cellNumber":30}
+	mapFunc = partial(run_case, **kwargs)
+
+	with Pool(pool_size) as p:
+		r = list(tqdm(p.imap(mapFunc, ensembled_case_list), total=len(ensembled_case_list)))
 
 if __name__ == "__main__":
 	main()
