@@ -12,6 +12,24 @@ This repository provides a fully automated CFD simulation pipeline using OpenFOA
 	```
 
 ## Usage
+### Single Run
+Check `single_run.py -h` for the detail usage.
+
+Quick example:
+```bash
+$ python single_run.py <case-dir> -v -p -c 8 -n 20
+```
+This will run in 8 cores with VTK output. `blockMesh` will perform with 20 cells in each direction.
+
+
+### Batch Run
+You have to provide `run_list.csv` along side with `all_run.py` within the same folder.
+
+To change number of threads, edit `pool_size` to any integer > 1.
+
+```bash
+$ python all_run.py
+```
 
 ## Processing Workflow
 1. After preparing vessel surface file (VTK/STL format), execute `batch_crop.py` for centerline extraction and inlet/outlet normalization (capping preferred)
