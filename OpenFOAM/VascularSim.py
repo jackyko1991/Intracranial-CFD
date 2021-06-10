@@ -348,12 +348,12 @@ def run_case(case_dir, output_vtk=False, parallel=True, cores=4, cellNumber=40):
 		tqdm.write("{}: Execute decompsePar...".format(datetime.datetime.now()))
 		os.system("decomposePar -case {} > {}".format(
 			tmp_dir.name,
-			os.path.join(tmp_dir.name,"log","decomposePar.log")))
+			os.path.join(tmp_dir.name,"log","decomposePar_1.log")))
 
 		# need to edit snappyHexMesh file for meshing
 		edit_snappyHexMeshDict(os.path.join(tmp_dir.name,"system","snappyHexMeshDict"), os.path.join(tmp_dir.name,"constant","domain.json"))
 		tqdm.write("{}: Execute snappyHexMesh in parallel...".format(datetime.datetime.now()))
-		os.system("foamJob -parallel -screen snappyHexMesh -case {} -overwrite > {}".format(
+		os.system("foamJob -parallel -screen -case {} snappyHexMesh -overwrite > {}".format(
 			tmp_dir.name,
 			os.path.join(tmp_dir.name,"log","snappyHexMesh.log")
 			))
@@ -362,11 +362,11 @@ def run_case(case_dir, output_vtk=False, parallel=True, cores=4, cellNumber=40):
 		tqdm.write("{}: Reconstructing mesh from parallel run...".format(datetime.datetime.now()))
 		os.system("reconstructParMesh -latestTime -mergeTol 1E-06 -constant -case {} > {}".format(
 			tmp_dir.name,
-			os.path.join(tmp_dir.name,"log","reconstructParMesh.log")
+			os.path.join(tmp_dir.name,"log","reconstructParMesh_2.log")
 			))
 		os.system("reconstructPar -latestTime -case {} > {}".format(
 			tmp_dir.name,
-			os.path.join(tmp_dir.name,"log","reconstructPar.log")
+			os.path.join(tmp_dir.name,"log","reconstructPar_1.log")
 			))
 
 		# remove all previously defined parallel outputs
@@ -379,11 +379,11 @@ def run_case(case_dir, output_vtk=False, parallel=True, cores=4, cellNumber=40):
 		edit_pressure(os.path.join(tmp_dir.name,"0","p"), os.path.join(tmp_dir.name,"constant","domain.json"), pressure=0)
 
 		# decompose the mesh for multicore computation
-		edit_decompseParDict("./system/decomposeParDict", cores=cores)
+		edit_decompseParDict(os.path.join(tmp_dir.name,"system","decomposeParDict"), cores=cores)
 		tqdm.write("{}: Execute decompsePar...".format(datetime.datetime.now()))
 		os.system("decomposePar -case {} > {}".format(
 			tmp_dir.name,
-			os.path.join(tmp_dir.name,"log","decomposePar.log")
+			os.path.join(tmp_dir.name,"log","decomposePar_2.log")
 			))
 
 		# CFD 
@@ -391,7 +391,7 @@ def run_case(case_dir, output_vtk=False, parallel=True, cores=4, cellNumber=40):
 		# os.system("foamJob -parallel -screen icoFoam > ./log/icoFoam.log")
 		
 		tqdm.write("{}: Execute pisoFoam in parallel...".format(datetime.datetime.now()))
-		os.system("foamJob -parallel -screen pisoFoam -case {} > {}".format(
+		os.system("foamJob -parallel -screen -case {} pisoFoam > {}".format(
 			tmp_dir.name,
 			os.path.join(tmp_dir.name,"log","pisoFoam.log")
 			))
@@ -400,15 +400,15 @@ def run_case(case_dir, output_vtk=False, parallel=True, cores=4, cellNumber=40):
 		tqdm.write("{}: Reconstructing mesh from parallel run...".format(datetime.datetime.now()))
 		os.system("reconstructParMesh -mergeTol 1E-06 -constant -case {} > {}".format(
 			tmp_dir.name,
-			os.path.join(tmp_dir.name,"log","reconstructParMesh.log")
+			os.path.join(tmp_dir.name,"log","reconstructParMesh_2.log")
 			))
 		os.system("reconstructPar -case {} > {}".format(
 			tmp_dir.name,
-			os.path.join(tmp_dir.name,"log","reconstructPar.log")
+			os.path.join(tmp_dir.name,"log","reconstructPar_2.log")
 			))
 	else:
 		# need to edit snappyHexMesh file for meshing
-		edit_snappyHexMeshDict(os.path.join(tmp_dir.name,"system","snappyHexMeshDict", os.path.join(tmp_dir.name,"constant","domain.json")))
+		edit_snappyHexMeshDict(os.path.join(tmp_dir.name,"system","snappyHexMeshDict"), os.path.join(tmp_dir.name,"constant","domain.json"))
 		tqdm.write("{}: Execute snappyHexMesh...".format(datetime.datetime.now()))
 		os.system("snappyHexMesh -overwrite -case {} > {}".format(
 			tmp_dir.name,
