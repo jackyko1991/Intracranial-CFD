@@ -2,11 +2,34 @@
 
 This repository provides a fully automated CFD simulation pipeline using OpenFOAM. User should provide vessel STL surface with named region and associated centerline file for the process.
 
-## OpenFOAM installation  (Ubuntu 18.04)
+## Dependency installation  (Ubuntu 18.04)
 1. Install OpenFOAM main package
-2. Install `PyFoam` for dictionary edition (https://openfoamwiki.net/index.php/Contrib/PyFoam)
-	1. We recommend users to use Anaconda 3.7 (https://www.anaconda.com/products/individual)
-	2. Install `PyFoam` using the command `pip install PyFoam`
+2. We recommend users to use Anaconda 3.7 (https://www.anaconda.com/products/individual). Anaconda provide virtual environment for workspace dependency control. Follow the instruction to install all required packages:
+	```bash
+	$ conda create -n openfoam python=3.7
+	$ conda activate openfoam
+	$ pip install trimesh tqdm vtk pyfoam
+	```
+
+## Usage
+### Single Run
+Check `single_run.py -h` for the detail usage.
+
+Quick example:
+```bash
+$ python single_run.py <case-dir> -v -p -c 8 -n 20
+```
+This will run in 8 cores with VTK output. `blockMesh` will perform with 20 cells in each direction.
+
+
+### Batch Run
+You have to provide `run_list.csv` along side with `all_run.py` within the same folder.
+
+To change number of threads, edit `pool_size` to any integer > 1.
+
+```bash
+$ python all_run.py
+```
 
 ## Processing Workflow
 1. After preparing vessel surface file (VTK/STL format), execute `batch_crop.py` for centerline extraction and inlet/outlet normalization (capping preferred)
@@ -54,6 +77,7 @@ Test results are as following:
 - OpenFOAM User Guide version 7 (http://foam.sourceforge.net/docs/Guides-a4/OpenFOAMUserGuide-A4.pdf)
 - Online OpenFOAM UserGuide (https://www.openfoam.com/documentation/user-guide/index.php)
 - OpenFOAM - open source CFD toolbox (https://events.prace-ri.eu/event/729/contributions/590/attachments/712/1015/Introduction_to_OpenFOAM_agrm_20180925.pdf)
+- PyFoam (https://openfoamwiki.net/index.php/Contrib/PyFoam)
 
 ## Output
 ### Units

@@ -134,15 +134,11 @@ def fit_func(x, a, b, c):
 	return a * b*(x+c) * np.exp(-b * (x+c)**2)
 
 def plot_centerline_result(centerline, array_names, result_path, dev_result_path ,minPoint=(0,0,0),bifurcationPoint=(0,0,0)):
-	# extract ica
 	thresholdFilter = vtk.vtkThreshold()
-	thresholdFilter.ThresholdBetween(1,1)
+	thresholdFilter.ThresholdBetween(1,9999)
 	thresholdFilter.SetInputData(centerline)
 	thresholdFilter.SetInputArrayToProcess(0, 0, 0, vtk.vtkDataObject.FIELD_ASSOCIATION_CELLS, "CenterlineIds_average")
 	thresholdFilter.Update()
-
-	if thresholdFilter.GetOutput().GetNumberOfPoints() == 0:
-		return
 
 	x = vtk_to_numpy(thresholdFilter.GetOutput().GetPointData().GetArray("Abscissas_average"))
 	x = [(value - x[0]) for value in x]
@@ -330,9 +326,9 @@ def centerline_probe_result(centerline_file,vtk_file_list, output_dir,minPoint=(
 		reader.SetFileName(file_name)
 		reader.Update() 
 
-		# geomFilter = vtk.vtkGeometryFilter()
-		# geomFilter.SetInputData(reader.GetOutput())
-		# geomFilter.Update()
+		geomFilter = vtk.vtkGeometryFilter()
+		geomFilter.SetInputData(reader.GetOutput())
+		geomFilter.Update()
 
 		# scale up the CFD result
 		transform = vtk.vtkTransform()
@@ -412,9 +408,9 @@ def centerline_probe_result(centerline_file,vtk_file_list, output_dir,minPoint=(
 	thresholdFilter.SetInputArrayToProcess(0, 0, 0, vtk.vtkDataObject.FIELD_ASSOCIATION_CELLS, "CenterlineIds_average")
 	thresholdFilter.Update()
 
-	if thresholdFilter.GetOutput().GetNumberOfPoints() == 0:
+	if thresholdFilter.GetOutput().GetNumberOfPoints() == 0 or fit_dict == None:
 		tqdm.write("Centerline file {} does not contain suitable number of CenterlineIds".format(centerline_file))
-		return {
+		return_value =  {
 			'radius mean(mm)': "NA",
 			'max radius gradient':"NA",
 			'radius min(mm)': "NA",
@@ -427,31 +423,31 @@ def centerline_probe_result(centerline_file,vtk_file_list, output_dir,minPoint=(
 			'vorticity mean(s^-1)': "NA",
 			'peak vorticity(s^-1)': "NA"
 			}
+	else:
+		# compute result values
+		abscissas = vtk_to_numpy(thresholdFilter.GetOutput().GetPointData().GetArray("Abscissas_average"))
+		radius = vtk_to_numpy(thresholdFilter.GetOutput().GetPointData().GetArray("Radius_average"))
+		pressure = vtk_to_numpy(thresholdFilter.GetOutput().GetPointData().GetArray("p(mmHg)_average"))
+		pressure_gradient = np.diff(pressure)/np.diff(abscissas)
+		velocity = vtk_to_numpy(thresholdFilter.GetOutput().GetPointData().GetArray("U_average"))
+		velocity = [math.sqrt(value[0]**2 + value[1]**2 +value[2]**2 ) for value in velocity]
+		vorticity = vtk_to_numpy(thresholdFilter.GetOutput().GetPointData().GetArray("vorticity_average"))
+		vorticity = [math.sqrt(value[0]**2 + value[1]**2 +value[2]**2 ) for value in vorticity]
 
-	# compute result values
-	abscissas = vtk_to_numpy(thresholdFilter.GetOutput().GetPointData().GetArray("Abscissas_average"))
-	radius = vtk_to_numpy(thresholdFilter.GetOutput().GetPointData().GetArray("Radius_average"))
-	pressure = vtk_to_numpy(thresholdFilter.GetOutput().GetPointData().GetArray("p(mmHg)_average"))
-	pressure_gradient = np.diff(pressure)/np.diff(abscissas)
-	velocity = vtk_to_numpy(thresholdFilter.GetOutput().GetPointData().GetArray("U_average"))
-	velocity = [math.sqrt(value[0]**2 + value[1]**2 +value[2]**2 ) for value in velocity]
-	vorticity = vtk_to_numpy(thresholdFilter.GetOutput().GetPointData().GetArray("vorticity_average"))
-	vorticity = [math.sqrt(value[0]**2 + value[1]**2 +value[2]**2 ) for value in vorticity]
-
-	return_value = {
-		'radius mean(mm)': np.mean(radius),
-		'radius min(mm)': np.min(radius),
-		'max radius gradient': fit_dict["Radius_average"],
-		'pressure mean(mmHg)': np.mean(pressure),
-		# 'max pressure gradient(mmHg)': np.mean(heapq.nlargest(5, pressure_gradient)),
-		'max pressure gradient(mmHg)': fit_dict["p(mmHg)_average"], 
-		'in/out pressure gradient(mmHg)': np.mean(pressure[0:5]) - np.mean(pressure[-5:]),
-		'velocity mean(ms^-1)': np.mean(velocity),
-		'peak velocity(ms^-1)': np.mean(heapq.nlargest(5, velocity)),
-		'max velocity gradient(ms^-1)': fit_dict["U_average"],
-		'vorticity mean(s^-1)': np.mean(vorticity),
-		'peak vorticity(s^-1)': np.mean(heapq.nlargest(5, vorticity))
-	}
+		return_value = {
+			'radius mean(mm)': np.mean(radius),
+			'radius min(mm)': np.min(radius),
+			'max radius gradient': fit_dict["Radius_average"],
+			'pressure mean(mmHg)': np.mean(pressure),
+			# 'max pressure gradient(mmHg)': np.mean(heapq.nlargest(5, pressure_gradient)),
+			'max pressure gradient(mmHg)': fit_dict["p(mmHg)_average"], 
+			'in/out pressure gradient(mmHg)': np.mean(pressure[0:5]) - np.mean(pressure[-5:]),
+			'velocity mean(ms^-1)': np.mean(velocity),
+			'peak velocity(ms^-1)': np.mean(heapq.nlargest(5, velocity)),
+			'max velocity gradient(ms^-1)': fit_dict["U_average"],
+			'vorticity mean(s^-1)': np.mean(vorticity),
+			'peak vorticity(s^-1)': np.mean(heapq.nlargest(5, vorticity))
+		}
 
 	# moving variance matrix
 	mv_fields = [
@@ -797,7 +793,7 @@ def probe_min_max_point(centerline_filename, surface_filename, minPoint=(0,0,0),
 	maxRadius = centerline.GetPointData().GetArray("Radius").GetTuple(maxIdx)[0]
 	DoS = (1-minRadius/maxRadius)*100
 
-	tqdm.write("min radius = {}\nmax radius = {} mm\nDegree of stenosis = {} %".format(minRadius,maxRadius,DoS))
+	tqdm.write("min radius = {:.2f}\nmax radius = {:.2f} mm\nDegree of stenosis = {:.2f} %".format(minRadius,maxRadius,DoS))
 
 	return DoS, minPoint, maxPoint
 
@@ -1050,9 +1046,10 @@ def result_analysis(case_dir, minPoint=(0,0,0), maxPoint=(0,0,0), probe=False ,s
 		return return_value, minPoint, maxPoint
 
 def main():
-	probe=False
-	stenosis=False
+	probe=True
+	stenosis=True
 	perform_fit = True
+	use_case_list = True
 
 	# output_file = "Z:/data/intracranial/CFD_results/result_medical.csv"
 	# data_folder = "Z:/data/intracranial/data_ESASIS_followup/medical"
@@ -1063,8 +1060,14 @@ def main():
 	# output_file = "Z:/data/intracranial/CFD_results/result_data_no_stenting.csv"
 	# data_folder = "Z:/data/intracranial/data_ESASIS_no_stenting"
 
-	output_file = "Z:/data/intracranial/CFD_results/result_data_surgery.csv"
-	data_folder = "Z:/data/intracranial/data_surgery"
+	# output_file = "Z:/data/intracranial/CFD_results/result_data_surgery.csv"
+	# data_folder = "Z:/data/intracranial/data_surgery"
+
+	# output_file = "Z:/data/intracranial/CFD_results/result_wingspan.csv"
+	# data_folder = "Z:/data/intracranial/data_wingspan"
+
+	output_file = "Z:/data/intracranial/CFD_results/result_aneurysm_with_stenosis_2.csv"
+	data_folder = "Z:/data/intracranial/data_aneurysm_with_stenosis"
 
 	# create result dataframe
 	field_names = ['patient','stage',
@@ -1096,10 +1099,16 @@ def main():
 	pbar = tqdm(os.listdir(data_folder))
 
 	ignore_case = [
-		"217",
+
 	]
 
 	stages = ["baseline"]
+
+	if use_case_list:
+		run_list = "./run_list.csv"
+		with open(run_list, newline='') as csvfile:
+			reader = csv.reader(csvfile)
+			run_cases = [l[0] for l in reader]
 
 	for case in pbar:
 		pbar.set_description(case)
@@ -1110,6 +1119,10 @@ def main():
 
 		if not os.path.exists(working_dir) or not os.path.exists(os.path.join(working_dir,"domain.json")):
 			continue
+
+		if use_case_list:
+			if not case in run_cases:
+				continue
 
 		if case in ignore_case:
 			continue

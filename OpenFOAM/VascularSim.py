@@ -379,7 +379,7 @@ def run_case(case_dir, output_vtk=False, parallel=True, cores=4, cellNumber=40, 
 		edit_pressure(os.path.join(tmp_dir.name,"0","p"), os.path.join(tmp_dir.name,"constant","domain.json"), pressure=0)
 
 		# decompose the mesh for multicore computation
-		edit_decompseParDict("./system/decomposeParDict", cores=cores)
+		edit_decompseParDict(os.path.join(tmp_dir.name,"system","decomposeParDict"), cores=cores)
 		tqdm.write("{}: Execute decompsePar...".format(datetime.datetime.now()))
 		os.system("decomposePar -case {} > {}".format(
 			tmp_dir.name,

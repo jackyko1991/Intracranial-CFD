@@ -1,0 +1,1 @@
+python -u all_run.py | tee allrun_medical.log
