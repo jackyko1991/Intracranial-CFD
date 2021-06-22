@@ -10,11 +10,13 @@ import matplotlib
 # matplotlib.use('Agg')
 matplotlib.use("TkAgg")
 import matplotlib.pyplot as plt
+plt.style.use('ggplot')
 import math
 import json
 from tqdm import tqdm
 from scipy.interpolate import interp1d
 from scipy.optimize import curve_fit
+
 def readCSV(path):
 	f = open(path, 'rb')
 	reader = csv.reader(f)
@@ -393,9 +395,19 @@ def centerline_probe_result(centerline_file,vtk_file_list, output_dir,minPoint=(
 	# plot result
 	plot_result_path = os.path.join(os.path.dirname(centerline_file),output_dir,"result.png")
 	dev_plot_result_path = os.path.join(os.path.dirname(centerline_file),output_dir,"result_dev.png")
+
+	plot_array = [
+		"Radius_average",
+		"U_average",
+		"p(mmHg)_average",
+		"vorticity_average",
+		"Curvature_average",
+		"Torsion_average"
+	]
+
 	fit_dict = plot_centerline_result(
 		averageFilter.GetOutput(),
-		["Radius_average","U_average","p(mmHg)_average","vorticity_average","Curvature_average","Torsion_average"], 
+		plot_array, 
 		plot_result_path,
 		dev_plot_result_path,
 		minPoint = minPoint,
@@ -1046,13 +1058,13 @@ def result_analysis(case_dir, minPoint=(0,0,0), maxPoint=(0,0,0), probe=False ,s
 		return return_value, minPoint, maxPoint
 
 def main():
-	probe=True
+	probe=False
 	stenosis=True
 	perform_fit = True
 	use_case_list = True
 
-	# output_file = "Z:/data/intracranial/CFD_results/result_medical.csv"
-	# data_folder = "Z:/data/intracranial/data_ESASIS_followup/medical"
+	output_file = "Z:/data/intracranial/CFD_results/result_medical_001.csv"
+	data_folder = "Z:/data/intracranial/data_ESASIS_followup/medical"
 
 	# output_file = "Z:/data/intracranial/CFD_results/result_stent.csv"
 	# data_folder = "Z:/data/intracranial/data_ESASIS_followup/stent"
@@ -1066,8 +1078,8 @@ def main():
 	# output_file = "Z:/data/intracranial/CFD_results/result_wingspan.csv"
 	# data_folder = "Z:/data/intracranial/data_wingspan"
 
-	output_file = "Z:/data/intracranial/CFD_results/result_aneurysm_with_stenosis_2.csv"
-	data_folder = "Z:/data/intracranial/data_aneurysm_with_stenosis"
+	# output_file = "Z:/data/intracranial/CFD_results/result_aneurysm_with_stenosis_2.csv"
+	# data_folder = "Z:/data/intracranial/data_aneurysm_with_stenosis"
 
 	# create result dataframe
 	field_names = ['patient','stage',
