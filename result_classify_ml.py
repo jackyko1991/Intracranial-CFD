@@ -495,13 +495,13 @@ class Classify:
 		return fold_aucs, macro_aucs
 
 def main():
-	suffix = "combined"
+	suffix = "dos"
 
 	result_csv = "Z:/data/intracranial/CFD_results/results_stenosis_no_neg_pressure.csv"
 	plot_output_dir = "Z:/data/intracranial/CFD_results/plots/results_{}".format(suffix)
 	model_output_dir = "Z:/data/intracranial/CFD_results/models/{}".format(suffix)
-	kfold_output_csv = "Z:/data/intracranial/CFD_results/auc/results_{}_kfold_aucs.csv".format(suffix)
-	macro_output_csv = "Z:/data/intracranial/CFD_results/auc/results_{}_macro_aucs.csv".format(suffix)
+	kfold_output_csv = "Z:/data/intracranial/CFD_results/metrics/metrics_{}_kfold.csv".format(suffix)
+	macro_output_csv = "Z:/data/intracranial/CFD_results/metrics/metrics_{}_macro.csv".format(suffix)
 	probability_output_csv = "Z:/data/intracranial/CFD_results/results_with_probability_{}.csv".format(suffix)
 
 	# result_csv = "Z:/data/intracranial/CFD_results/scores.csv"
@@ -539,10 +539,10 @@ def main():
 		#"translesion peak presssure(mmHg)",
 		#"translesion presssure ratio",	
 		#"translesion peak pressure gradient(mmHgmm^-1)",	
-		"translesion peak velocity(ms^-1)",	
+		##"translesion peak velocity(ms^-1)",	
 		#"translesion velocity ratio",	
-		"translesion peak velocity gradient(ms^-1mm^-1)",
-		"translesion peak vorticity(ms^-1)",
+		##"translesion peak velocity gradient(ms^-1mm^-1)",
+		##"translesion peak vorticity(ms^-1)",
 		# "translesion vorticity ratio",	
 		#"translesion peak vorticity gradient(Pamm^-1)",
 		#"translesion peak wss(Pa)",	
