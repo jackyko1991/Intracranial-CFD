@@ -4,7 +4,6 @@ from multiprocessing import Pool
 import datetime
 import json
 from tqdm import tqdm
-import trimesh
 import csv
 from VascularSim import *
 import time
@@ -28,10 +27,7 @@ def main():
 		"data_wingspan",
 		"data_aneurysm_with_stenosis"
 		]
-
-	# data_dir = "/mnt/DIIR-JK-NAS/data/intracranial/data_30_30"
-	# sub_data_dirs = ["surgery"]
-
+		
 	# phases = ["baseline", "baseline-post", "12months", "followup"]
 	phases = ["baseline"]
 

@@ -40,6 +40,13 @@ def ArgParse():
 		default=40,
 		help="Number of cell blocks in each dimension during blockMesh"
 		)
+	parser.add_argument(
+		"--output_dir_name",
+		metavar='STR',
+		type=str,
+		default="CFD_OpenFOAM",
+		help="Output directory name"
+		)
 
 	# args = [
 	# 	"/mnt/DIIR-JK-NAS/data/intracranial/data_surgery/217/baseline",
@@ -53,7 +60,7 @@ def ArgParse():
 	return parser.parse_args()
 
 def main(args):
-	run_case(args.dir, output_vtk=args.vtk, parallel=args.parallel, cores=args.cores, cellNumber=args.cell_num)
+	run_case(args.dir, output_vtk=args.vtk, parallel=args.parallel, cores=args.cores, cellNumber=args.cell_num, output_dir_name=args.output_dir_name)
 
 if __name__ == "__main__":
 	args = ArgParse()
