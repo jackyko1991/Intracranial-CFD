@@ -6,7 +6,7 @@ from sklearn.multiclass import OneVsRestClassifier
 from sklearn import metrics
 from sklearn import svm
 from sklearn.linear_model import LogisticRegression
-from sklearn.metrics import accuracy_score, classification_report, roc_curve, auc
+from sklearn.metrics import accuracy_score, classification_report, roc_curve, auc, precision_score, classification_report
 from sklearn.neural_network import MLPClassifier
 from sklearn.preprocessing import label_binarize
 import matplotlib
@@ -54,58 +54,6 @@ class Model:
 		clf.fit(self.X_train, self.y_train)
 
 		return clf
-
-	def get_metrics():
-		self.y_train_fit = clf.predict(self.X_train)
-		self.y_test_fit = clf.predict(self.X_test)
-
-		# acc_train = accuracy_score(self.y_train, self.y_train_fit)
-		# acc_test = accuracy_score(self.y_test, self.y_test_fit)
-
-		# print("Training Accuracy: {:.2f}%".format(acc_train*100))
-		# print("Testing Accuracy: {:.2f}%".format(acc_test*100))
-
-		# target_names = ['non stroke', 'stroke']
-		# # print("Training report:")
-		# # print(classification_report(self.y_train, self.y_train_fit, target_names=target_names))
-		# # print("Testing report:")
-		# # print(classification_report(self.y_test, self.y_test_fit, target_names=target_names))
-
-		# # y_true = np.array([[0, 0, 1],
-		# # 					[0, 1, 0],
-		# # 					[1, 1, 0]])
-		# # y_pred = np.array([[0, 1, 0],
-		# # 					[0, 0, 1],
-		# # 					[1, 1, 0]])
-		# # mcm = metrics.multilabel_confusion_matrix(y_true, y_pred)
-		# # print(mcm)
-		# # print("***")
-		# # print(mcm[:,0,0])
-
-		# mcm = metrics.multilabel_confusion_matrix(self.y_train, self.y_train_fit)
-
-		# tn = mcm[:, 0, 0]
-		# tp = mcm[:, 1, 1]
-		# fn = mcm[:, 1, 0]
-		# fp = mcm[:, 0, 1]
-		# sensitivity = tp / (tp + fn)
-		# specificity = tn / (tn + fp)
-		# print("Training sensitivity: {:.2f}%".format(sensitivity[1]*100))
-		# print("Training specificity: {:.2f}%".format(specificity[1]*100))
-
-		# mcm = metrics.multilabel_confusion_matrix(self.y_test, self.y_test_fit)
-
-		# tn = mcm[:, 0, 0]
-		# tp = mcm[:, 1, 1]
-		# fn = mcm[:, 1, 0]
-		# fp = mcm[:, 0, 1]
-		# sensitivity = tp / (tp + fn)
-		# specificity = tn / (tn + fp)
-
-		# print("TP: {}, FP: {}, TN: {}, FN: {}".format(tp,fp,tn,fn))
-
-		# print("Testing sensitivity: {:.2f}%".format(sensitivity[1]*100))
-		# print("Testing specificity: {:.2f}%".format(specificity[1]*100))
 
 def Find_Optimal_Cutoff(TPR, FPR, threshold=[]):
 	y = TPR - FPR
@@ -183,36 +131,69 @@ class Classify:
 				else:
 					ax.set(xlim=[-0.00, 1.0], ylim=[0.0, 1.05], xlabel='False Positive Rate', ylabel='True Positive Rate',title="{} ({})".format(self.classnames[i%self.n_classes],"Test"))
 
+		# k fold macro average
 		tprs_train = []
 		fprs_train = []
 		aucs_train = []
+		sensitivity_train = []
+		specificity_train = []
+		precision_train = []
+		accuracy_train = []
+		f1_train = []
+
 		tprs_test = []
 		fprs_test = []
 		aucs_test = []
+		sensitivity_test = []
+		specificity_test = []
+		precision_test = []
+		accuracy_test = []
+		f1_test = []
+
 		mean_fpr = np.linspace(0, 1, 100)
 
 		columnNames = ["Method","Train/Test","Fold"]
 		if self.n_classes <3:
 			columnNames.append("AUC") 
 			columnNames.append("Youden\'s index")
+			columnNames.append("Sensitivity")
+			columnNames.append("Specificity")
+			columnNames.append("Precision")
+			columnNames.append("Accuracy")
+			columnNames.append("F1 score")
 		else:
 			for i in range(self.n_classes):
 				columnNames.append("AUC {}".format(str(i))) 
 				columnNames.append("Youden\'s index {}".format(str(i)))
+				columnNames.append("Sensitivity {}".format(str(i)))
+				columnNames.append("Specificity {}".format(str(i)))
+				columnNames.append("Precision {}".format(str(i)))
+				columnNames.append("Accuracy {}".format(str(i)))
+				columnNames.append("F1 score {}".format(str(i)))
 			
-		fold_aucs = {columnName: [] for columnName in columnNames}
+		fold_metrics = {columnName: [] for columnName in columnNames}
 
 		columnNames = ["Method","Train/Test"]
 		if self.n_classes <3:
 			columnNames.append("AUC") 
 			columnNames.append("SD")
 			columnNames.append("Youden\'s index")
+			columnNames.append("Sensitivity")
+			columnNames.append("Specificity")
+			columnNames.append("Precision")
+			columnNames.append("Accuracy")
+			columnNames.append("F1 score")
 		else: 
 			for i in range(self.n_classes):
 				columnNames.append("AUC {}".format(str(i)))
 				columnNames.append("SD {}".format(str(i)))
 				columnNames.append("Youden\'s index {}".format(str(i)))
-		macro_aucs = {columnName: [] for columnName in columnNames}
+				columnNames.append("Sensitivity {}".format(str(i)))
+				columnNames.append("Specificity {}".format(str(i)))
+				columnNames.append("Precision {}".format(str(i)))
+				columnNames.append("Accuracy {}".format(str(i)))
+				columnNames.append("F1 score {}".format(str(i)))
+		macro_metrics = {columnName: [] for columnName in columnNames}
 
 		#model saving dir
 		tqdm.write(self.model_dir)
@@ -236,17 +217,20 @@ class Classify:
 			if self.save_models:
 				pickle.dump(clf, open(os.path.join(self.model_dir,"fold_{}.sav".format(i)), 'wb'))
 
+			# classification report
+			report_train = classification_report(y_train,clf.predict(X_train),target_names=self.classnames,output_dict=True)
+			report_test = classification_report(y_test,clf.predict(X_test),target_names=self.classnames,output_dict=True)
+
 			# Compute ROC curve and ROC area for each class
 			fpr_train = dict()
 			tpr_train = dict()
 			thresholds_train = dict()
 			roc_auc_train = dict()
-			youdens_idx_train = dict()
+
 			fpr_test = dict()
 			tpr_test = dict()
 			thresholds_test = dict()
 			roc_auc_test = dict()
-			youdens_idx_test = dict()
 
 			if self.n_classes > 2:
 				for j in range(self.n_classes):
@@ -322,36 +306,59 @@ class Classify:
 			fprs_test.append(fpr_test)
 			aucs_test.append(roc_auc_test)
 
-			fold_aucs["Method"].append(self.method)
-			fold_aucs["Train/Test"].append("Train")
-			fold_aucs["Fold"].append(i + 1)
+			fold_metrics["Method"].append(self.method)
+			fold_metrics["Train/Test"].append("Train")
+			fold_metrics["Fold"].append(i + 1)
 
 			if self.n_classes <3:
-				fold_aucs["AUC"].append(roc_auc_train)
-				fold_aucs["Youden\'s index"].append(youden_idx_train)
-			else:
-				for j in range(self.n_classes):
-					fold_aucs["AUC {}".format(j)].append(roc_auc_train[j])
-					fold_aucs["Youden\'s index {}".format(j)].append(youden_idx_train[j])
+				fold_metrics["AUC"].append(roc_auc_train)
+				fold_metrics["Youden\'s index"].append(youden_idx_train)
+				fold_metrics["Sensitivity"].append(optimal_point_train[1])
+				fold_metrics["Specificity"].append(1 - optimal_point_train[0])
+				fold_metrics["Precision"].append(report_train[self.classnames[1]]["precision"])
+				fold_metrics["Accuracy"].append(report_train["accuracy"])
+				fold_metrics["F1 score"].append(report_train[self.classnames[1]]["f1-score"])
 
-			fold_aucs["Method"].append(self.method)
-			fold_aucs["Train/Test"].append("Test")
-			fold_aucs["Fold"].append(i + 1)
-			if self.n_classes <3:
-				fold_aucs["AUC"].append(roc_auc_test)
-				fold_aucs["Youden\'s index"].append(youden_idx_test)
+				sensitivity_train.append(optimal_point_train[1])
+				specificity_train.append(1-optimal_point_train[0])
+				precision_train.append(report_train[self.classnames[1]]["precision"])
+				accuracy_train.append(report_train["accuracy"])
+				f1_train.append(report_train[self.classnames[1]]["f1-score"])
 			else:
 				for j in range(self.n_classes):
-					fold_aucs["AUC {}".format(j)].append(roc_auc_test[j])
-					fold_aucs["Youden\'s index {}".format(j)].append(youden_idx_test[j])
+					fold_metrics["AUC {}".format(j)].append(roc_auc_train[j])
+					fold_metrics["Youden\'s index {}".format(j)].append(youden_idx_train[j])
+					# other metrics to be added
+
+			fold_metrics["Method"].append(self.method)
+			fold_metrics["Train/Test"].append("Test")
+			fold_metrics["Fold"].append(i + 1)
+			if self.n_classes <3:
+				fold_metrics["AUC"].append(roc_auc_test)
+				fold_metrics["Youden\'s index"].append(youden_idx_test)
+				fold_metrics["Sensitivity"].append(optimal_point_test[1])
+				fold_metrics["Specificity"].append(1 - optimal_point_test[0])
+				fold_metrics["Precision"].append(report_test[self.classnames[1]]["precision"])
+				fold_metrics["Accuracy"].append(report_test["accuracy"])
+				fold_metrics["F1 score"].append(report_test[self.classnames[1]]["f1-score"])
+
+				sensitivity_test.append(optimal_point_test[1])
+				specificity_test.append(1-optimal_point_test[0])
+				precision_test.append(report_test[self.classnames[1]]["precision"])
+				accuracy_test.append(report_test["accuracy"])
+				f1_test.append(report_test[self.classnames[1]]["f1-score"])
+			else:
+				for j in range(self.n_classes):
+					fold_metrics["AUC {}".format(j)].append(roc_auc_test[j])
+					fold_metrics["Youden\'s index {}".format(j)].append(youden_idx_test[j])
 
 		# average
 		mean_fpr = np.linspace(0,1,100)
 
 		if self.n_classes <3:
 			# train
-			macro_aucs["Method"].append(self.method)
-			macro_aucs["Train/Test"].append("Train")
+			macro_metrics["Method"].append(self.method)
+			macro_metrics["Train/Test"].append("Train")
 			tprs = []
 			for tpr, fpr in zip(tprs_train,fprs_train):
 				interp_tpr = np.interp(mean_fpr, fpr, tpr)
@@ -376,13 +383,18 @@ class Classify:
 			axs[0].fill_between(mean_fpr, tprs_lower, tprs_upper, color='grey', alpha=.2,
 				label=r'$\pm$ 1 std. dev.')
 
-			macro_aucs["AUC"].append(mean_auc)
-			macro_aucs["SD"].append(std_auc)
-			macro_aucs["Youden\'s index"].append(youden_idx_train)
+			macro_metrics["AUC"].append(mean_auc)
+			macro_metrics["SD"].append(std_auc)
+			macro_metrics["Youden\'s index"].append(youden_idx_train)
+			macro_metrics["Sensitivity"].append(np.mean(sensitivity_train))
+			macro_metrics["Specificity"].append(np.mean(specificity_train))
+			macro_metrics["Precision"].append(np.mean(precision_train))
+			macro_metrics["Accuracy"].append(np.mean(accuracy_train))
+			macro_metrics["F1 score"].append(np.mean(f1_train))
 
 			# test
-			macro_aucs["Method"].append(self.method)
-			macro_aucs["Train/Test"].append("Test")
+			macro_metrics["Method"].append(self.method)
+			macro_metrics["Train/Test"].append("Test")
 			tprs = []
 			for tpr, fpr in zip(tprs_test,fprs_test):
 				interp_tpr = np.interp(mean_fpr, fpr, tpr)
@@ -406,14 +418,18 @@ class Classify:
 			axs[1].fill_between(mean_fpr, tprs_lower, tprs_upper, color='grey', alpha=.2,
 				label=r'$\pm$ 1 std. dev.')
 
-			macro_aucs["AUC"].append(mean_auc)
-			macro_aucs["SD"].append(std_auc)
-			macro_aucs["Youden\'s index"].append(youden_idx_test)
-
+			macro_metrics["AUC"].append(mean_auc)
+			macro_metrics["SD"].append(std_auc)
+			macro_metrics["Youden\'s index"].append(youden_idx_test)
+			macro_metrics["Sensitivity"].append(np.mean(sensitivity_test))
+			macro_metrics["Specificity"].append(np.mean(specificity_test))
+			macro_metrics["Precision"].append(np.mean(precision_test))
+			macro_metrics["Accuracy"].append(np.mean(accuracy_test))
+			macro_metrics["F1 score"].append(np.mean(f1_test))
 		else:
 			# train
-			macro_aucs["Method"].append(self.method)
-			macro_aucs["Train/Test"].append("Train")
+			macro_metrics["Method"].append(self.method)
+			macro_metrics["Train/Test"].append("Train")
 			for i in range(self.n_classes):
 				tprs = []
 				for tpr, fpr in zip(tprs_train,fprs_train):
@@ -439,13 +455,13 @@ class Classify:
 				axs[0,i].fill_between(mean_fpr, tprs_lower, tprs_upper, color='grey', alpha=.2,
 					label=r'$\pm$ 1 std. dev.')
 
-				macro_aucs["AUC {}".format(str(i))].append(mean_auc)
-				macro_aucs["SD {}".format(str(i))].append(std_auc)
-				macro_aucs["Youden\'s index {}".format(str(i))].append(youden_idx_train)
+				macro_metrics["AUC {}".format(str(i))].append(mean_auc)
+				macro_metrics["SD {}".format(str(i))].append(std_auc)
+				macro_metrics["Youden\'s index {}".format(str(i))].append(youden_idx_train)
 
 			# test
-			macro_aucs["Method"].append(self.method)
-			macro_aucs["Train/Test"].append("Test")
+			macro_metrics["Method"].append(self.method)
+			macro_metrics["Train/Test"].append("Test")
 
 			for i in range(self.n_classes):
 				tprs = []
@@ -472,9 +488,9 @@ class Classify:
 				axs[1,i].fill_between(mean_fpr, tprs_lower, tprs_upper, color='grey', alpha=.2,
 					label=r'$\pm$ 1 std. dev.')
 
-				macro_aucs["AUC {}".format(str(i))].append(mean_auc)
-				macro_aucs["SD {}".format(str(i))].append(std_auc)
-				macro_aucs["Youden\'s index {}".format(str(i))].append(youden_idx_test)
+				macro_metrics["AUC {}".format(str(i))].append(mean_auc)
+				macro_metrics["SD {}".format(str(i))].append(std_auc)
+				macro_metrics["Youden\'s index {}".format(str(i))].append(youden_idx_test)
 
 		for i, ax in enumerate(axs.flatten()):
 			ax.legend(loc="lower right")
@@ -492,7 +508,7 @@ class Classify:
 			prob_avg += value
 		self.prob["fold_avg"] = prob_avg/self.n_folds
 
-		return fold_aucs, macro_aucs
+		return fold_metrics, macro_metrics
 
 def main():
 	suffix = "dos"
@@ -512,6 +528,7 @@ def main():
 	result = pd.read_csv(result_csv)
 
 	show_plot = False
+	save_plot = True
 	save_models = True
 	mlp_iter = 200
 
@@ -595,6 +612,7 @@ def main():
 	classify.plot_dir = plot_output_dir
 	classify.show_plot = show_plot
 	classify.save_models = save_models
+	classify.save_plot = save_plot
 
 	# output df
 	columnNames = ["Method","Train/Test","Fold"]
@@ -604,7 +622,7 @@ def main():
 		for i in range(len(classes)):
 			columnNames.append("AUC {}".format(str(i))) 
 
-	fold_aucs_df = pd.DataFrame(columns=columnNames)
+	fold_metrics_df = pd.DataFrame(columns=columnNames)
 
 	columnNames = ["Method","Train/Test"]
 	if len(classes) <3:
@@ -615,7 +633,7 @@ def main():
 			columnNames.append("AUC {}".format(str(i)))
 			columnNames.append("SD {}".format(str(i)))
 
-	macro_aucs_df = pd.DataFrame(columns=columnNames)
+	macro_metrics_df = pd.DataFrame(columns=columnNames)
 
 	# perform classification on different methods
 	pbar = tqdm(methods)
@@ -623,25 +641,25 @@ def main():
 		pbar.set_description(method)
 		classify.method = method
 		classify.model_dir = os.path.join(model_output_dir,method)
-		fold_aucs, macro_aucs = classify.run()
+		fold_metrics, macro_metrics = classify.run()
 
 		if len(classes) < 3:
 			result['probability_{}'.format(method)] = classify.prob['fold_avg']
 		else:
 			exit("probability output not ready for class number > 3")
 
-		fold_aucs_df = fold_aucs_df.append(pd.DataFrame.from_dict(fold_aucs), ignore_index=True)
-		macro_aucs_df = macro_aucs_df.append(pd.DataFrame.from_dict(macro_aucs), ignore_index=True)
+		fold_metrics_df = fold_metrics_df.append(pd.DataFrame.from_dict(fold_metrics), ignore_index=True)
+		macro_metrics_df = macro_metrics_df.append(pd.DataFrame.from_dict(macro_metrics), ignore_index=True)
 
 	# write csv
 	tqdm.write("Writing output CSV...")
 	if not os.path.exists(os.path.dirname(kfold_output_csv)):
 		os.makedirs(os.path.dirname(kfold_output_csv))
-	fold_aucs_df.to_csv(kfold_output_csv,index=False)
+	fold_metrics_df.to_csv(kfold_output_csv,index=False)
 
 	if not os.path.exists(os.path.dirname(macro_output_csv)):
 		os.makedirs(os.path.dirname(macro_output_csv))
-	macro_aucs_df.to_csv(macro_output_csv,index=False)
+	macro_metrics_df.to_csv(macro_output_csv,index=False)
 
 	if not os.path.exists(os.path.dirname(probability_output_csv)):
 		os.makedirs(os.path.dirname(probability_output_csv))
