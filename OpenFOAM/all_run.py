@@ -73,7 +73,7 @@ def main():
 	# create thread pool
 	pool_size = 5
 
-	kwargs = {"output_vtk": True, "parallel":True, "cores":8, "cellNumber":30}
+	kwargs = {"output_vtk": True, "parallel":True, "cores":8, "cellNumber":20}
 	mapFunc = partial(run_case, **kwargs)
 
 	with Pool(pool_size) as p:
