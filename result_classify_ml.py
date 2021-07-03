@@ -75,6 +75,7 @@ class Classify:
 		show_plot=False,
 		save_plot=False,
 		save_models=False,
+		save_roc=False,
 		plot_dir="",
 		model_dir="",
 		n_folds = 5,
@@ -88,6 +89,7 @@ class Classify:
 		self.show_plot = show_plot
 		self.save_plot = save_plot
 		self.save_models = save_models
+		self.save_roc = save_roc
 		self.plot_dir = plot_dir
 		self.model_dir = model_dir
 		self.n_folds = n_folds
@@ -273,10 +275,42 @@ class Classify:
 						fpr_train, tpr_train, thresholds_train = roc_curve(y_train, clf.predict_proba(X_train))
 						fpr_test, tpr_test, thresholds_test = roc_curve(y_test, clf.predict_proba(X_test))
 
+						if self.save_roc:
+							roc_cols = ["FPR_0","TPR_0","Thresholds_0"]
+							roc_train_df = pd.DataFrame(columns=roc_cols)
+							roc_test_df = pd.DataFrame(columns=roc_cols)
+
+							roc_train_df["FPR_0"] = np.array(fpr_train)
+							roc_train_df["TPR_0"] = np.array(tpr_train)
+							roc_train_df["Thresholds_0"] = np.array(thresholds_train)
+
+							roc_test_df["FPR_0"] = np.array(fpr_test)
+							roc_test_df["TPR_0"] = np.array(tpr_test)
+							roc_test_df["Thresholds_0"] = np.array(thresholds_test)
+
+							roc_train_df.to_csv(os.path.join(self.plot_dir,"roc_{}_fold{}_{}.csv".format("train",str(i),self.method)),index=False)
+							roc_test_df.to_csv(os.path.join(self.plot_dir,"roc_{}_fold{}_{}.csv".format("test",str(i),self.method)),index=False)
+
 						prob = clf.predict_proba(self.X)
 					else:
 						fpr_train, tpr_train, thresholds_train = roc_curve(y_train, clf.predict_proba(X_train)[:,1])
 						fpr_test, tpr_test, thresholds_test = roc_curve(y_test, clf.predict_proba(X_test)[:,1])
+
+						if self.save_roc:
+							roc_cols = ["FPR_0","TPR_0","Thresholds_0"]
+							roc_train_df = pd.DataFrame(columns=roc_cols)
+							roc_test_df = pd.DataFrame(columns=roc_cols)
+
+							roc_train_df["FPR_0"] = np.array(fpr_train)
+							roc_train_df["TPR_0"] = np.array(tpr_train)
+							roc_train_df["Thresholds_0"] = np.array(thresholds_train)
+
+							roc_test_df["FPR_0"] = np.array(fpr_test)
+							roc_test_df["TPR_0"] = np.array(tpr_test)
+							roc_test_df["Thresholds_0"] = np.array(thresholds_test)
+
+							roc_train_df.to_csv(os.path.join(self.plot_dir,"roc_{}_fold{}_{}.csv".format("train",str(i),self.method)),index=False)
+							roc_test_df.to_csv(os.path.join(self.plot_dir,"roc_{}_fold{}_{}.csv".format("test",str(i),self.method)),index=False)
 
 						prob = clf.predict_proba(self.X)[:,1]
 
@@ -383,6 +417,15 @@ class Classify:
 			axs[0].fill_between(mean_fpr, tprs_lower, tprs_upper, color='grey', alpha=.2,
 				label=r'$\pm$ 1 std. dev.')
 
+			if self.save_roc:
+				roc_cols = ["FPR_0","TPR_0","SD_Upper_0","SD_Lower_0"]
+				roc_train_df = pd.DataFrame(columns=roc_cols)
+				roc_train_df["FPR_0"] = np.array(mean_tpr)
+				roc_train_df["TPR_0"] = np.array(mean_fpr)
+				roc_train_df["SD_Upper_0"] = np.array(tprs_upper)
+				roc_train_df["SD_Lower_0"] = np.array(tprs_lower)
+				roc_train_df.to_csv(os.path.join(self.plot_dir,"roc_{}_mean_{}.csv".format("train",self.method)),index=False)
+
 			macro_metrics["AUC"].append(mean_auc)
 			macro_metrics["SD"].append(std_auc)
 			macro_metrics["Youden\'s index"].append(youden_idx_train)
@@ -401,6 +444,7 @@ class Classify:
 				tprs.append(interp_tpr)
 			mean_tpr = np.mean(tprs,axis=0)
 			mean_tpr[-1] = 1.0
+
 			mean_auc = metrics.auc(mean_fpr, mean_tpr)
 			aucs = [auc for auc in aucs_test]
 			std_auc = np.std(aucs)
@@ -417,6 +461,15 @@ class Classify:
 			tprs_lower = np.maximum(mean_tpr - std_tpr, 0)
 			axs[1].fill_between(mean_fpr, tprs_lower, tprs_upper, color='grey', alpha=.2,
 				label=r'$\pm$ 1 std. dev.')
+
+			if self.save_roc:
+				roc_cols = ["FPR_0","TPR_0","SD_Upper_0","SD_Lower_0"]
+				roc_test_df = pd.DataFrame(columns=roc_cols)
+				roc_test_df["FPR_0"] = np.array(mean_tpr)
+				roc_test_df["TPR_0"] = np.array(mean_fpr)
+				roc_test_df["SD_Upper_0"] = np.array(tprs_upper)
+				roc_test_df["SD_Lower_0"] = np.array(tprs_lower)
+				roc_test_df.to_csv(os.path.join(self.plot_dir,"roc_{}_mean_{}.csv".format("test",self.method)),index=False)
 
 			macro_metrics["AUC"].append(mean_auc)
 			macro_metrics["SD"].append(std_auc)
@@ -513,23 +566,25 @@ class Classify:
 def main():
 	suffix = "dos"
 
-	result_csv = "Z:/data/intracranial/CFD_results/results_stenosis_no_neg_pressure.csv"
-	plot_output_dir = "Z:/data/intracranial/CFD_results/plots/results_{}".format(suffix)
-	model_output_dir = "Z:/data/intracranial/CFD_results/models/{}".format(suffix)
-	kfold_output_csv = "Z:/data/intracranial/CFD_results/metrics/metrics_{}_kfold.csv".format(suffix)
-	macro_output_csv = "Z:/data/intracranial/CFD_results/metrics/metrics_{}_macro.csv".format(suffix)
-	probability_output_csv = "Z:/data/intracranial/CFD_results/results_with_probability_{}.csv".format(suffix)
+	# result_csv = "Z:/data/intracranial/CFD_results/results_stenosis_no_neg_pressure.csv"
+	# plot_output_dir = "Z:/data/intracranial/CFD_results/plots/results_{}".format(suffix)
+	# model_output_dir = "Z:/data/intracranial/CFD_results/models/{}".format(suffix)
+	# kfold_output_csv = "Z:/data/intracranial/CFD_results/metrics/metrics_{}_kfold.csv".format(suffix)
+	# macro_output_csv = "Z:/data/intracranial/CFD_results/metrics/metrics_{}_macro.csv".format(suffix)
+	# probability_output_csv = "Z:/data/intracranial/CFD_results/results_with_probability_{}.csv".format(suffix)
 
-	# result_csv = "Z:/data/intracranial/CFD_results/scores.csv"
-	# # result_csv = "/Volumes/shared/projects/intracranial/results.csv"
-	# plot_output_dir = "Z:/data/intracranial/CFD_results/plots/scores_sum"
-	# kfold_output_csv = "Z:/data/intracranial/CFD_results/auc/scores_sum_kfold_aucs.csv"
-	# macro_output_csv = "Z:/data/intracranial/CFD_results/auc/scores_sum_macro_aucs.csv"
+	result_csv = "Y:/data/intracranial/CFD_results/results_stenosis_no_neg_pressure.csv"
+	plot_output_dir = "Y:/data/intracranial/CFD_results/plots/results_{}".format(suffix)
+	model_output_dir = "Y:/data/intracranial/CFD_results/models/{}".format(suffix)
+	kfold_output_csv = "Y:/data/intracranial/CFD_results/metrics/metrics_{}_kfold.csv".format(suffix)
+	macro_output_csv = "Y:/data/intracranial/CFD_results/metrics/metrics_{}_macro.csv".format(suffix)
+	probability_output_csv = "Y:/data/intracranial/CFD_results/results_with_probability_{}.csv".format(suffix)
 	result = pd.read_csv(result_csv)
 
 	show_plot = False
 	save_plot = True
 	save_models = True
+	save_roc = True
 	mlp_iter = 200
 
 	methods = [
@@ -613,6 +668,7 @@ def main():
 	classify.show_plot = show_plot
 	classify.save_models = save_models
 	classify.save_plot = save_plot
+	classify.save_roc = save_roc
 
 	# output df
 	columnNames = ["Method","Train/Test","Fold"]
