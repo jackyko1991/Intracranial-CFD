@@ -395,7 +395,8 @@ def centerline_probe_result(centerline_file,vtk_file_list, output_dir,minPoint=(
 	dev_plot_result_path = os.path.join(os.path.dirname(centerline_file),output_dir,"result_dev.png")
 	fit_dict = plot_centerline_result(
 		averageFilter.GetOutput(),
-		["Radius_average","U_average","p(mmHg)_average","vorticity_average","Curvature_average","Torsion_average"], 
+		["U_average","p(mmHg)_average"], 
+		#["Radius_average","U_average","p(mmHg)_average","vorticity_average","Curvature_average","Torsion_average"], 
 		plot_result_path,
 		dev_plot_result_path,
 		minPoint = minPoint,
@@ -1046,10 +1047,10 @@ def result_analysis(case_dir, minPoint=(0,0,0), maxPoint=(0,0,0), probe=False ,s
 		return return_value, minPoint, maxPoint
 
 def main():
-	probe=True
+	probe=False
 	stenosis=True
 	perform_fit = True
-	use_case_list = True
+	use_case_list = False
 
 	# output_file = "Z:/data/intracranial/CFD_results/result_medical.csv"
 	# data_folder = "Z:/data/intracranial/data_ESASIS_followup/medical"
@@ -1066,8 +1067,11 @@ def main():
 	# output_file = "Z:/data/intracranial/CFD_results/result_wingspan.csv"
 	# data_folder = "Z:/data/intracranial/data_wingspan"
 
-	output_file = "Z:/data/intracranial/CFD_results/result_aneurysm_with_stenosis_2.csv"
-	data_folder = "Z:/data/intracranial/data_aneurysm_with_stenosis"
+	#output_file = "Z:/data/intracranial/CFD_results/result_aneurysm_with_stenosis_2.csv"
+	#data_folder = "Z:/data/intracranial/data_aneurysm_with_stenosis"
+
+	output_file = "Y:/data/intracranial/CFD_results/result_medical_001.csv"
+	data_folder = "Y:/data/intracranial/data_ESASIS_followup/medical"
 
 	# create result dataframe
 	field_names = ['patient','stage',
@@ -1096,7 +1100,9 @@ def main():
 
 	result_df = pd.DataFrame(columns=field_names)
 
-	pbar = tqdm(os.listdir(data_folder))
+	case_list = os.listdir(data_folder)
+	case_list = ["001"]
+	pbar = tqdm(case_list)
 
 	ignore_case = [
 
