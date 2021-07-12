@@ -511,7 +511,7 @@ class Classify:
 		return fold_metrics, macro_metrics
 
 def main():
-	suffix = "dos"
+	suffix = "cfd"
 
 	result_csv = "Z:/data/intracranial/CFD_results/results_stenosis_no_neg_pressure.csv"
 	plot_output_dir = "Z:/data/intracranial/CFD_results/plots/results_{}".format(suffix)
@@ -542,7 +542,7 @@ def main():
 
 	result_X = result[[
 		# "radius mean(mm)",
-		"degree of stenosis(%)",
+		#"degree of stenosis(%)",
 		#"radius min(mm)",
 		# "pressure mean(mmHg)",
 		# "max radius gradient",
@@ -556,10 +556,10 @@ def main():
 		#"translesion peak presssure(mmHg)",
 		#"translesion presssure ratio",	
 		#"translesion peak pressure gradient(mmHgmm^-1)",	
-		##"translesion peak velocity(ms^-1)",	
+		"translesion peak velocity(ms^-1)",	
 		#"translesion velocity ratio",	
-		##"translesion peak velocity gradient(ms^-1mm^-1)",
-		##"translesion peak vorticity(ms^-1)",
+		"translesion peak velocity gradient(ms^-1mm^-1)",
+		"translesion peak vorticity(ms^-1)",
 		# "translesion vorticity ratio",	
 		#"translesion peak vorticity gradient(Pamm^-1)",
 		#"translesion peak wss(Pa)",	
