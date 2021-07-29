@@ -3,6 +3,7 @@ import SimpleITK as sitk
 import vtk
 from tqdm import tqdm
 from sys import platform
+import pathlib
 
 def ExtractLargestConnectedComponents(label):
 	ccFilter = sitk.ConnectedComponentImageFilter()
@@ -149,7 +150,12 @@ def LabelToSurface(label_path, surface_path, lcc=False, smoothIterations=15,rela
 		connectedFilter.Update()
 		surface = connectedFilter.GetOutput()
 
-	writer = vtk.vtkGenericDataObjectWriter()
+	if pathlib.Path(surface_path).suffix == ".vtk":
+		writer = vtk.vtkGenericDataObjectWriter()
+	elif pathlib.Path(surface_path).suffix == ".vtp":
+		writer = vtk.vtkXMLPolyDataWriter()
+	elif pathlib.Path(surface_path).suffix == ".stl":
+		writer = vtk.vtkSTLWriter()
 	writer.SetFileName(surface_path)
 	writer.SetInputData(surface)
 	writer.Update()
@@ -205,31 +211,29 @@ def crop_defected_region(image_path, defected_point_csv_path, cropped_image_path
 	writer.Execute(image)
 
 def main():
-	data_folder = "/mnt/DIIR-JK-NAS/data/intracranial"
+	data_folder = "Z:\\data\\intracranial"
 
 	sub_data_folders = [
 		"data_ESASIS_followup/medical",
 		"data_ESASIS_followup/stent",
 		"data_ESASIS_no_stenting",
 		"data_surgery",
-		"data_wingspan"
+		"data_wingspan",
+		#"data_aneurysm_with_stenosis"
 		]
-	# tx_types = ["medical","stent"]
-	# tx_types = ["medical"]
+
+	sitk_lcc = True
+
 	# phases = ["baseline","baseline-post","12months","followup"]
-	phases = ["baseline"]
-	label_filename = "label_lcc.nii.gz"
-	lcc_label_filename_3DRA = "label_lcc.nii.gz"
-	# lcc_label_filename_CBCT = "CBCT_seg_ICA_terminus_lcc.nii.gz"
+	phases = ["baseline-post","12months"]
+	label_filename = "label.nii.gz"
+	lcc_label_filename = "label_lcc.nii.gz"
 
-	output_surface_name = "surface.vtk"
-
-	# for tx_type in tx_types:
-		# pbar = tqdm(os.listdir(os.path.join(data_folder,tx_type)))
+	output_surface_name = "surface.stl"
 
 	for sub_data_folder in sub_data_folders:
-		# datalist = os.listdir(os.path.join(data_folder,sub_data_folder))
-		datalist = ["ChanPitChuen"]
+		datalist = os.listdir(os.path.join(data_folder,sub_data_folder))
+
 		pbar = tqdm(datalist)
 		for case in pbar:
 			pbar.set_description(case)
@@ -240,22 +244,23 @@ def main():
 				# else:
 				# 	label_file = os.path.join(data_folder,tx_type,case, phase, lcc_label_filename_3DRA)
 
-				label_file = os.path.join(data_folder,sub_data_folder,case,phase,lcc_label_filename_3DRA)
+				label_file = os.path.join(data_folder,sub_data_folder,case,phase,label_filename)
+				lcc_label_file = os.path.join(data_folder,sub_data_folder,case,phase, lcc_label_filename)
+
+				if sitk_lcc:
+					label = sitk.ReadImage(label_file)
+					label = ExtractLargestConnectedComponents(label)
+					sitk.WriteImage(label,lcc_label_file)
 
 				if not os.path.exists(label_file):
 					continue
-				# output_surface = os.path.join(data_folder,tx_type,case, phase, output_surface_name)
 				output_surface = os.path.join(data_folder,sub_data_folder,case,phase,output_surface_name)
 
 				#if os.path.exists(output_surface):
 				#	continue
 				
-				# Extract3DRA(data_folder + "baseline/3DRA.nii",data_folder + "baseline/seg_vessel.nii")
-				# Extract3DRA(data_folder + "baseline-post/3DRA.nii",data_folder + "baseline-post/seg_vessel.nii")
-				# Extract3DRA(data_folder + "12months/3DRA.nii",data_folder + "12months/seg_vessel.nii")
-				# ExtractCBCT(data_folder + "followup/CBCT.nii",data_folder + "followup/seg_vessel.nii")
 				if phase=="followup":
-					LabelToSurface(label_file, output_surface,lcc=True,relaxationFactor=0.5)
+					LabelToSurface(label_file, output_surface,lcc=True, relaxationFactor=0.5)
 				else:
 					LabelToSurface(label_file, output_surface,lcc=True,relaxationFactor=0.1)
 				# crop_defected_region(os.path.join(data_folder,"3DRA","3DRA.nii"), os.path.join(data_folder,"defected_point.fcsv"),os.path.join(data_folder,"3DRA","3DRA_cropped.nii.gz"))
