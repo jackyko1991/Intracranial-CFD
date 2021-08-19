@@ -17,7 +17,7 @@ def worker(name,a=1):
 
 def main():
 	data_dir = "/mnt/DIIR-JK-NAS/data/intracranial"
-	use_run_list = True
+	use_run_list = False
 
 	sub_data_dirs = [
 		"data_ESASIS_followup/medical",
@@ -28,8 +28,8 @@ def main():
 		"data_aneurysm_with_stenosis"
 		]
 		
-	# phases = ["baseline", "baseline-post", "12months", "followup"]
-	phases = ["baseline"]
+	#phases = ["baseline-post", "12months"]
+	phases = ["baseline-post"]
 
 	if use_run_list:
 		run_list = "./run_list.csv"
@@ -38,8 +38,6 @@ def main():
 			run_cases = [l[0] for l in reader]
 
 	ignore_cases = [
-		"002",
-		"057",
 		]
 
 	ensembled_case_list = []
@@ -65,19 +63,21 @@ def main():
 				if not os.path.exists(os.path.join(data_dir,sub_data_dir,case,phase,"domain.json")):
 					continue
 
-				#if os.path.exists(os.path.join(data_dir,sub_data_dir,case,phase,"CFD_OpenFOAM")):
-				#	continue
+				if os.path.exists(os.path.join(data_dir,sub_data_dir,case,phase,"CFD_OpenFOAM","VTK","OpenFOAM_2000.vtk")):
+					continue
 
 				ensembled_case_list.append(os.path.join(data_dir,sub_data_dir,case,phase))
 
 	# create thread pool
-	pool_size = 5
+	pool_size = 2
 
 	kwargs = {"output_vtk": True, "parallel":True, "cores":8, "cellNumber":20}
 	mapFunc = partial(run_case, **kwargs)
 
 	with Pool(pool_size) as p:
-		r = list(tqdm(p.imap(mapFunc, ensembled_case_list), total=len(ensembled_case_list)))
+		with tqdm(total=len(ensembled_case_list)) as pbar:
+			for i, _ in enumerate(p.imap(mapFunc, ensembled_case_list)):
+				pbar.update()
 
 if __name__ == "__main__":
 	main()
