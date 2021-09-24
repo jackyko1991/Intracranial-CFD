@@ -3,12 +3,13 @@ import numpy as np
 from sklearn.model_selection import KFold
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.multiclass import OneVsRestClassifier
-from sklearn import metrics
-from sklearn import svm
+from sklearn import metrics, svm, decomposition
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import accuracy_score, classification_report, roc_curve, auc, precision_score, classification_report
 from sklearn.neural_network import MLPClassifier
-from sklearn.preprocessing import label_binarize
+from sklearn.preprocessing import label_binarize, StandardScaler
+from sklearn.compose import ColumnTransformer
+from sklearn.pipeline import Pipeline
 import matplotlib
 matplotlib.use('TkAgg')
 import matplotlib.pyplot as plt
@@ -76,6 +77,7 @@ class Classify:
 		save_plot=False,
 		save_models=False,
 		save_roc=False,
+		pca=0,
 		plot_dir="",
 		model_dir="",
 		n_folds = 5,
@@ -90,6 +92,7 @@ class Classify:
 		self.save_plot = save_plot
 		self.save_models = save_models
 		self.save_roc = save_roc
+		self.pca = pca
 		self.plot_dir = plot_dir
 		self.model_dir = model_dir
 		self.n_folds = n_folds
@@ -112,6 +115,11 @@ class Classify:
 
 		# K fold
 		kf = KFold(n_splits=self.n_folds,shuffle=True,random_state=0)
+
+		# pca
+		if self.pca and self.pca<len(self.X.columns):
+			pca = decomposition.PCA(n_components=self.pca)
+			self.X = pd.DataFrame(pca.fit_transform(self.X))
 
 		# plot
 		if self.n_classes < 3:
@@ -203,9 +211,12 @@ class Classify:
 			os.makedirs(self.model_dir,exist_ok=True)
 			tqdm.write(self.model_dir)
 
+		# clean up
+		self.prob={}
+
 		for i, (train_index, test_index) in enumerate(kf.split(self.X)):
-			X_train, X_test = self.X[train_index], self.X[test_index]
-			y_train, y_test = self.y[train_index], self.y[test_index]
+			X_train, X_test = self.X.iloc[train_index], self.X.iloc[test_index]
+			y_train, y_test = self.y.iloc[train_index], self.y.iloc[test_index]
 
 			model.X_train = X_train
 			model.X_test = X_test
@@ -309,6 +320,9 @@ class Classify:
 							roc_test_df["TPR_0"] = np.array(tpr_test)
 							roc_test_df["Thresholds_0"] = np.array(thresholds_test)
 
+							if not os.path.exists(self.plot_dir):
+								os.makedirs(self.plot_dir)
+
 							roc_train_df.to_csv(os.path.join(self.plot_dir,"roc_{}_fold{}_{}.csv".format("train",str(i),self.method)),index=False)
 							roc_test_df.to_csv(os.path.join(self.plot_dir,"roc_{}_fold{}_{}.csv".format("test",str(i),self.method)),index=False)
 
@@ -403,7 +417,7 @@ class Classify:
 			aucs = [auc for auc in aucs_train]
 			std_auc = np.std(aucs)
 			# youden's index
-			_, optimal_point_train, youden_idx_train = Find_Optimal_Cutoff(TPR=mean_tpr,FPR=mean_fpr)
+			optimal_threshold, optimal_point_train, youden_idx_train = Find_Optimal_Cutoff(TPR=mean_tpr,FPR=mean_fpr)
 
 			axs[0].plot(mean_fpr, mean_tpr, color='b',
 				label='Mean ROC (AUC = {:.2f} $\pm$ {:.2f})'.format(mean_auc, std_auc),
@@ -420,8 +434,8 @@ class Classify:
 			if self.save_roc:
 				roc_cols = ["FPR_0","TPR_0","SD_Upper_0","SD_Lower_0"]
 				roc_train_df = pd.DataFrame(columns=roc_cols)
-				roc_train_df["FPR_0"] = np.array(mean_tpr)
-				roc_train_df["TPR_0"] = np.array(mean_fpr)
+				roc_train_df["FPR_0"] = np.array(mean_fpr)
+				roc_train_df["TPR_0"] = np.array(mean_tpr)
 				roc_train_df["SD_Upper_0"] = np.array(tprs_upper)
 				roc_train_df["SD_Lower_0"] = np.array(tprs_lower)
 				roc_train_df.to_csv(os.path.join(self.plot_dir,"roc_{}_mean_{}.csv".format("train",self.method)),index=False)
@@ -465,8 +479,8 @@ class Classify:
 			if self.save_roc:
 				roc_cols = ["FPR_0","TPR_0","SD_Upper_0","SD_Lower_0"]
 				roc_test_df = pd.DataFrame(columns=roc_cols)
-				roc_test_df["FPR_0"] = np.array(mean_tpr)
-				roc_test_df["TPR_0"] = np.array(mean_fpr)
+				roc_test_df["FPR_0"] = np.array(mean_fpr)
+				roc_test_df["TPR_0"] = np.array(mean_tpr)
 				roc_test_df["SD_Upper_0"] = np.array(tprs_upper)
 				roc_test_df["SD_Lower_0"] = np.array(tprs_lower)
 				roc_test_df.to_csv(os.path.join(self.plot_dir,"roc_{}_mean_{}.csv".format("test",self.method)),index=False)
@@ -557,6 +571,7 @@ class Classify:
 			plt.show()
 
 		prob_avg = np.zeros_like(self.prob["fold_0"])
+
 		for key, value in self.prob.items():
 			prob_avg += value
 		self.prob["fold_avg"] = prob_avg/self.n_folds
@@ -564,40 +579,51 @@ class Classify:
 		return fold_metrics, macro_metrics
 
 def main():
-	suffix = "cfd"
+	result_csv = "Z:/data/intracranial/CFD_results/baseline/results_stenosis_no_neg_pressure_20210922.csv"
 
-	# result_csv = "Z:/data/intracranial/CFD_results/results_stenosis_no_neg_pressure.csv"
-	# plot_output_dir = "Z:/data/intracranial/CFD_results/plots/results_{}".format(suffix)
-	# model_output_dir = "Z:/data/intracranial/CFD_results/models/{}".format(suffix)
-	# kfold_output_csv = "Z:/data/intracranial/CFD_results/metrics/metrics_{}_kfold.csv".format(suffix)
-	# macro_output_csv = "Z:/data/intracranial/CFD_results/metrics/metrics_{}_macro.csv".format(suffix)
-	# probability_output_csv = "Z:/data/intracranial/CFD_results/results_with_probability_{}.csv".format(suffix)
-
-	result_csv = "Y:/data/intracranial/CFD_results/results_stenosis_no_neg_pressure.csv"
-	plot_output_dir = "Y:/data/intracranial/CFD_results/plots/results_{}".format(suffix)
-	model_output_dir = "Y:/data/intracranial/CFD_results/models/{}".format(suffix)
-	kfold_output_csv = "Y:/data/intracranial/CFD_results/metrics/metrics_{}_kfold.csv".format(suffix)
-	macro_output_csv = "Y:/data/intracranial/CFD_results/metrics/metrics_{}_macro.csv".format(suffix)
-	probability_output_csv = "Y:/data/intracranial/CFD_results/results_with_probability_{}.csv".format(suffix)
-	result = pd.read_csv(result_csv)
+	plot_output_dir = "Z:/data/intracranial/CFD_results/baseline/plots"
+	model_output_dir = "Z:/data/intracranial/CFD_results/baseline/models"
+	metrics_output_dir = "Z:/data/intracranial/CFD_results/baseline/metric"
+	probability_output_dir = "Z:/data/intracranial/CFD_results/baseline"
 
 	show_plot = False
 	save_plot = True
 	save_models = True
 	save_roc = True
 	mlp_iter = 200
+	pca = 0 # number of principle components, disable if=0
 
 	methods = [
-		"RandomForest",
 		"LogisticRegression",
+		"RandomForest",
 		# "SVM_Linear",
 		"SVM_RBF",
 		"MLP"
 	]
 
-	result_X = result[[
-		# "radius mean(mm)",
-		#"degree of stenosis(%)",
+	features_dict = {}
+	features_dict["dos"] = ["degree of stenosis(%)"]
+	features_dict["morph"] = [
+		"radius mean(mm)",
+		"degree of stenosis(%)",
+		"radius min(mm)"
+		]
+	features_dict["cfd"] = [
+		#"translesion peak presssure(mmHg)",
+		"translesion presssure ratio",	
+		"translesion peak pressure gradient(mmHgmm^-1)",	
+		"translesion peak velocity(ms^-1)",	
+		#"translesion velocity ratio",	
+		"translesion peak velocity gradient(ms^-1mm^-1)",
+		"translesion peak vorticity(ms^-1)",
+		# "translesion vorticity ratio",	
+		#"translesion peak vorticity gradient(Pamm^-1)",
+		"translesion peak wss(Pa)",	
+		#"translesion peak wss gradient(Pamm^-1)"
+		]
+	features_dict["dos_cfd"] = [
+		#"radius mean(mm)",
+		"degree of stenosis(%)",
 		#"radius min(mm)",
 		# "pressure mean(mmHg)",
 		# "max radius gradient",
@@ -609,119 +635,133 @@ def main():
 		# "vorticity mean(s^-1)",	
 		#"peak vorticity(s^-1)",
 		#"translesion peak presssure(mmHg)",
-		#"translesion presssure ratio",	
-		#"translesion peak pressure gradient(mmHgmm^-1)",	
+		"translesion presssure ratio",	
+		"translesion peak pressure gradient(mmHgmm^-1)",	
 		"translesion peak velocity(ms^-1)",	
 		#"translesion velocity ratio",	
 		"translesion peak velocity gradient(ms^-1mm^-1)",
 		"translesion peak vorticity(ms^-1)",
 		# "translesion vorticity ratio",	
 		#"translesion peak vorticity gradient(Pamm^-1)",
-		#"translesion peak wss(Pa)",	
+		"translesion peak wss(Pa)",	
 		#"translesion peak wss gradient(Pamm^-1)"
-		]]
+	]
+	features_dict["morph_cfd"] = [
+		"radius mean(mm)",
+		"degree of stenosis(%)",
+		"radius min(mm)",
+		# "pressure mean(mmHg)",
+		# "max radius gradient",
+		#"max pressure gradient(mmHg)",
+		#"in/out pressure gradient(mmHg)",
+		# "velocity mean(ms^-1)",
+		#"peak velocity(ms^-1)",
+		#"max velocity gradient(ms^-1)",
+		# "vorticity mean(s^-1)",	
+		#"peak vorticity(s^-1)",
+		#"translesion peak presssure(mmHg)",
+		"translesion presssure ratio",	
+		"translesion peak pressure gradient(mmHgmm^-1)",	
+		"translesion peak velocity(ms^-1)",	
+		#"translesion velocity ratio",	
+		"translesion peak velocity gradient(ms^-1mm^-1)",
+		"translesion peak vorticity(ms^-1)",
+		# "translesion vorticity ratio",	
+		#"translesion peak vorticity gradient(Pamm^-1)",
+		"translesion peak wss(Pa)",	
+		#"translesion peak wss gradient(Pamm^-1)"
+	]
+	
+	# read data
+	result = pd.read_csv(result_csv)
 
-	# # selected by anova
-	# result_X = result[[
-	# 	"radius mean(mm)",
-	# 	# "radius min(mm)",
-	# 	# "pressure mean(mmHg)",
-	# 	# "max pressure gradient(mmHg)",
-	# 	# "in/out pressure gradient(mmHg)",
-	# 	"velocity mean(ms^-1)",
-	# 	"peak velocity(ms^-1)",
-	# 	# "max velocity gradient(ms^-1)",
-	# 	"vorticity mean(s^-1)",	
-	# 	"peak vorticity(s^-1)"
-	# 	]]
+	for feature_type, features in features_dict.items():
+		result_X = result[features]
 
-	# # select by human
-	# result_X = result[[
-	# 	"degree of stenosis(%)",
-	# 	"in/out pressure gradient(mmHg)",
-	# 	"peak velocity(ms^-1)",
-	# 	"peak vorticity(s^-1)"
-	# 	]]
+		#result_Y = result[["stroke","type","stenosis"]]
+		# result_Y = result[["stroke","stenosis"]]
+		result_Y = result[["stroke"]]
 
-	# result_X = result[[
-	# 	"degree of stenosis(%)",
-	# 	]]
+		# severity
+		# classes = [0,1,2]
+		# classnames = ["normal","moderate","severe"]
+		classes = [0,1]
+		classnames = ["normal","stroke"]
+		# classnames = ["normal","ICAD"]
 
-	result_Y = result[["stroke","type","stenosis"]]
+		# normalization
+		scaler = StandardScaler()
+		scaler.fit(result_X)
+		result_X[features] = scaler.transform(result_X[features].to_numpy())
 
-	result_X_array = result_X.to_numpy()
-	# severity
-	# classes = [0,1,2]
-	# classnames = ["normal","moderate","severe"]
-	classes = [0,1]
-	classnames = ["normal","stroke"]
-	# classnames = ["normal","ICAD"]
+		classify = Classify(result_X,result_Y,classnames=classnames)
+		classify.mlp_iter = mlp_iter
+		classify.plot_dir = os.path.join(plot_output_dir,"results_{}".format(feature_type))
+		classify.show_plot = show_plot
+		classify.save_models = save_models
+		classify.save_plot = save_plot
+		classify.save_roc = save_roc
+		classify.n_folds = 5
+		classify.pca=pca
 
-	# stroke: [:,0], severity: [:,1], "icad": [:,2]
-	result_Y_array = label_binarize(result_Y.to_numpy()[:,0],classes=classes)
-	# result_Y_array = label_binarize(result_Y.to_numpy()[:,1],classes=classes)
-	# result_Y_array = label_binarize(result_Y.to_numpy()[:,2],classes=classes)
-
-	classify = Classify(result_X_array,result_Y_array,classnames=classnames)
-	classify.mlp_iter = mlp_iter
-	classify.plot_dir = plot_output_dir
-	classify.show_plot = show_plot
-	classify.save_models = save_models
-	classify.save_plot = save_plot
-	classify.save_roc = save_roc
-
-	# output df
-	columnNames = ["Method","Train/Test","Fold"]
-	if len(classes) <3:
-		columnNames.append("AUC") 
-	else:
-		for i in range(len(classes)):
-			columnNames.append("AUC {}".format(str(i))) 
-
-	fold_metrics_df = pd.DataFrame(columns=columnNames)
-
-	columnNames = ["Method","Train/Test"]
-	if len(classes) <3:
-		columnNames.append("AUC")
-		columnNames.append("SD")
-	else:
-		for i in range(len(classes)):
-			columnNames.append("AUC {}".format(str(i)))
-			columnNames.append("SD {}".format(str(i)))
-
-	macro_metrics_df = pd.DataFrame(columns=columnNames)
-
-	# perform classification on different methods
-	pbar = tqdm(methods)
-	for method in pbar:
-		pbar.set_description(method)
-		classify.method = method
-		classify.model_dir = os.path.join(model_output_dir,method)
-		fold_metrics, macro_metrics = classify.run()
-
-		if len(classes) < 3:
-			result['probability_{}'.format(method)] = classify.prob['fold_avg']
+		# output df
+		columnNames = ["Method","Train/Test","Dataset","Fold"]
+		if len(classes) <3:
+			columnNames.append("AUC") 
 		else:
-			exit("probability output not ready for class number > 3")
+			for i in range(len(classes)):
+				columnNames.append("AUC {}".format(str(i))) 
 
-		fold_metrics_df = fold_metrics_df.append(pd.DataFrame.from_dict(fold_metrics), ignore_index=True)
-		macro_metrics_df = macro_metrics_df.append(pd.DataFrame.from_dict(macro_metrics), ignore_index=True)
+		fold_metrics_df = pd.DataFrame(columns=columnNames)
 
-	# write csv
-	tqdm.write("Writing output CSV...")
-	if not os.path.exists(os.path.dirname(kfold_output_csv)):
-		os.makedirs(os.path.dirname(kfold_output_csv))
-	fold_metrics_df.to_csv(kfold_output_csv,index=False)
+		columnNames = ["Method","Train/Test","Dataset"]
+		if len(classes) <3:
+			columnNames.append("AUC")
+			columnNames.append("SD")
+		else:
+			for i in range(len(classes)):
+				columnNames.append("AUC {}".format(str(i)))
+				columnNames.append("SD {}".format(str(i)))
 
-	if not os.path.exists(os.path.dirname(macro_output_csv)):
-		os.makedirs(os.path.dirname(macro_output_csv))
-	macro_metrics_df.to_csv(macro_output_csv,index=False)
+		macro_metrics_df = pd.DataFrame(columns=columnNames)
 
-	if not os.path.exists(os.path.dirname(probability_output_csv)):
-		os.makedirs(os.path.dirname(probability_output_csv))
-	result.to_csv(probability_output_csv,index=False)
+		# perform classification on different methods
+		pbar = tqdm(methods)
+		for method in pbar:
+			pbar.set_description(method)
+			classify.method = method
+			classify.model_dir = os.path.join(model_output_dir,feature_type,method)
+			fold_metrics, macro_metrics = classify.run()
+			fold_metrics["Dataset"] = feature_type
+			macro_metrics["Dataset"] = feature_type
 
-	tqdm.write("Write output CSV complete")
+			if len(classes) < 3:
+				result['probability_{}'.format(method)] = classify.prob['fold_avg']
+			else:
+				exit("probability output not ready for class number > 3")
+
+			fold_metrics_df = fold_metrics_df.append(pd.DataFrame.from_dict(fold_metrics), ignore_index=True)
+			macro_metrics_df = macro_metrics_df.append(pd.DataFrame.from_dict(macro_metrics), ignore_index=True)
+
+		# write csv
+		kfold_output_csv = os.path.join(metrics_output_dir,"metrics_{}_kfold.csv".format(feature_type))
+		macro_output_csv = os.path.join(metrics_output_dir,"metrics_{}_macro.csv".format(feature_type))
+		probability_output_csv = os.path.join(probability_output_dir,"results_with_probability_{}.csv".format(feature_type))
+
+		tqdm.write("Writing output CSV...")
+		if not os.path.exists(os.path.dirname(kfold_output_csv)):
+			os.makedirs(os.path.dirname(kfold_output_csv))
+		fold_metrics_df.to_csv(kfold_output_csv,index=False)
+
+		if not os.path.exists(os.path.dirname(macro_output_csv)):
+			os.makedirs(os.path.dirname(macro_output_csv))
+		macro_metrics_df.to_csv(macro_output_csv,index=False)
+
+		if not os.path.exists(os.path.dirname(probability_output_csv)):
+			os.makedirs(os.path.dirname(probability_output_csv))
+		result.to_csv(probability_output_csv,index=False)
+
+		tqdm.write("Write output CSV complete")
 
 if __name__ == "__main__":
 	main()
