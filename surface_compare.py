@@ -1,5 +1,8 @@
 import os
+from scipy.sparse import data
 import vtk
+from tqdm import tqdm
+import pandas as pd
 
 def SurfaceDistance(threeDRA_path,CBCT_path,output_path):
 	reader3DRA = vtk.vtkSTLReader()
@@ -28,31 +31,37 @@ def SurfaceDistance(threeDRA_path,CBCT_path,output_path):
   	writer.Update()
 
 def main():
-	data_folder = "D:/Cloud/Google Drive/intracranial vessels/followup/stent/"
-	for patient in os.listdir(data_folder):
-		print "Working on patient",patient
+	data_dir = "Z:/data/intracranial"
+	src_dirs = [
+		"data_esasis_followup/medical",
+		"data_esasis_followup/stent",
+		"data_ESASIS_no_stenting",
+		"data_wingspan",
+		"data_aneurysm_with_stenosis"
+	]
 
-		if not os.path.isfile(data_folder + patient + '/baseline/surface.stl') :
-			print patient + '/baseline/surface.stl not exist, case skipped'
-			return
+	count = 0
 
-		if os.path.isfile(data_folder + patient + '/baseline-post/surface.stl') :
-			print "Progress: post stent"
-			SurfaceDistance(data_folder + patient +  '/baseline/surface.stl',data_folder + patient + '/baseline-post/surface.stl',data_folder + patient + '/baseline-post/surfaceDistance.vtp')
-		else:
-			print patient + '/baseline-post/surface.stl not exist'
+	results_df = pd.DataFrame(columns=["case","surface distance","plaque volume", "dos"])
 
-		if os.path.isfile(data_folder + patient + '/12months/surface.stl') :
-			print "Progress: 12 months"
-			SurfaceDistance(data_folder + patient +  '/baseline/surface.stl',data_folder + patient + '/12months/surface.stl',data_folder + patient + '/12months/surfaceDistance.vtp')
-		else:
-			print patient + '/12months/surface.stl not exist'
-		
-		if os.path.isfile(data_folder + patient + '/followup/surface.stl') :
-			print "Progress: followup"
-			SurfaceDistance(data_folder + patient +  '/baseline/surface.stl',data_folder + patient + '/followup/surface.stl',data_folder + patient + '/followup/surfaceDistance.vtp')
-		else:
-			print patient + '/followup/surface.stl not exist'
+	for src_dir in src_dirs:
+		pbar = tqdm(os.listdir(os.path.join(data_dir,src_dir)))
 
+		for case in pbar:
+			pbar.set_description(case)
+
+			# load smoothed surface
+			smoothed_surface_file = os.path.join(data_dir,src_dir,)
+
+			# load recon surface
+			# compute surface distance
+			# vtkMassProperty for volume difference (plaque volume)
+			
+
+			count += 1
+			if count == 10:
+				exit()
+
+				
 if __name__ == "__main__":
     main()
