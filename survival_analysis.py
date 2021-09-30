@@ -1,8 +1,9 @@
 from re import I
 import time
+from tqdm import tqdm
 import matplotlib.pyplot as plt
 from sksurv.nonparametric import kaplan_meier_estimator
-from sksurv.linear_model import CoxPHSurvivalAnalysis
+from sksurv.linear_model import CoxPHSurvivalAnalysis, CoxnetSurvivalAnalysis
 import pandas as pd
 import numpy as np
 from sksurv.metrics import concordance_index_censored, cumulative_dynamic_auc
@@ -12,10 +13,8 @@ from sklearn.model_selection import GridSearchCV, KFold, StratifiedKFold, train_
 import warnings
 from sklearn.exceptions import ConvergenceWarning
 from sklearn.preprocessing import StandardScaler
-
-from lifelines import CoxPHFitter
-from lifelines.utils.sklearn_adapter import sklearn_adapter
-from lifelines.datasets import load_rossi
+from scipy.interpolate import interp1d
+import multiprocessing
 
 def fit_and_score_features(X, y):
     n_features = X.shape[1]
@@ -27,12 +26,15 @@ def fit_and_score_features(X, y):
         scores[j] = m.score(Xj, y)
     return scores
 
-def plot_coefficients(coefs, n_highlight):
+def plot_coefficients(coefs, n_highlight,semilogx=True):
     fig ,ax = plt.subplots(figsize=(9,6))
     n_features = coefs.shape[0]
     alphas = coefs.columns
     for row in coefs.itertuples():
-        ax.semilogx(alphas, row[1:], ".-", label=row.Index)
+        if semilogx:
+            ax.semilogx(alphas, row[1:], ".-", label=row.Index)
+        else:
+            ax.plot(alphas, row[1:], ".-", label=row.Index)
     
     alpha_min = alphas.min()
     top_coefs = coefs.loc[:, alpha_min].map(abs).sort_values().tail(n_highlight)
@@ -55,12 +57,12 @@ def plot_coefficients(coefs, n_highlight):
 
 def main():
     csv_file = "Z:/data/intracranial/recurrent/results_recurrent.csv"
-    gcv_output_file = "Z:/data/intracranial/recurrent/alpha_cox_ridge_model.csv"
+    gcv_output_file = "Z:/data/intracranial/recurrent/alpha_cox_ridge_model_recurrent.csv"
     result = pd.read_csv(csv_file)
 
     result_X = result[[
         #"annual followup",
-        "group(medical=0,stent=1)",
+        #"group(medical=0,stent=1)",
         "age",
         "degree of stenosis(%)",
         "radius min(mm)",
@@ -87,15 +89,23 @@ def main():
         "AIS within one year",
         "1st AIS date delta with 1 year censor",
         "TIA within one year",
-        "1st TIA date delta with 1 year censor"
+        "1st TIA date delta with 1 year censor",
+        "recurrent within one year",
+        "1st recurrent date delta with 1 year censor"
         ]]
     result_Y["AIS within one year"] = result_Y["AIS within one year"].astype(bool)
     result_Y["TIA within one year"] = result_Y["TIA within one year"].astype(bool)
+    result_Y["recurrent within one year"] = result_Y["recurrent within one year"].astype(bool)
 
     result_Y_AIS = result_Y[[
         "AIS within one year",
         "1st AIS date delta with 1 year censor",
     ]]
+
+    # result_Y_AIS = result_Y[[
+    #     "recurrent within one year",
+    #     "1st recurrent date delta with 1 year censor",
+    # ]]
 
     result_Y_AIS_array = result_Y_AIS.to_records(index=False)
 
@@ -108,13 +118,17 @@ def main():
 
     alphas = 10.**np.linspace(-1*search_mag_depth,search_mag_depth,50)
     coefficients = {}
-    estimator = CoxPHSurvivalAnalysis()
+    estimator = make_pipeline(
+        StandardScaler(),
+        CoxPHSurvivalAnalysis()
+    )
 
-    for alpha in alphas:
-        estimator.set_params(alpha=alpha)
+    pbar = tqdm(alphas)
+    for alpha in pbar:
+        estimator.set_params(coxphsurvivalanalysis__alpha=alpha)
         estimator.fit(result_X,result_Y_AIS_array)
         key = round(alpha,5)
-        coefficients[key] = estimator.coef_
+        coefficients[key] = estimator.named_steps['coxphsurvivalanalysis'].coef_
     
     coefficients = (pd.DataFrame
         .from_dict(coefficients)
@@ -123,19 +137,21 @@ def main():
 
     fig_cox_rigid, ax_cox_rigid = plot_coefficients(coefficients, n_highlight=5)
 
-    # choosing penalty strength alpha
+    # choosing penalty strength alpha and l1 ratios
     # perform 5 fold cross validation to estimate performance with c-index for each alpha
     print("==================== Grid searching optimal alpha ====================")
 
     cox_ridge_pipe = make_pipeline(
         StandardScaler(),
-        CoxPHSurvivalAnalysis(alpha=0.01)
+        CoxPHSurvivalAnalysis()
     )
-    param_grid = {'coxphsurvivalanalysis__alpha': alphas}
+    param_grid = {
+        'coxphsurvivalanalysis__alpha': alphas
+        }
 
     cv = KFold(n_splits=5, random_state=1, shuffle=True)
     # cv = StratifiedKFold(5, random_state=1,shuffle=True)
-    gcv = GridSearchCV(cox_ridge_pipe, param_grid, return_train_score=True,error_score=0.5,n_jobs=16, cv=cv)
+    gcv = GridSearchCV(cox_ridge_pipe, param_grid, return_train_score=True,error_score=0.5,n_jobs=multiprocessing.cpu_count(), cv=cv)
     gcv.fit(result_X, result_Y_AIS_array)
     cv_results = pd.DataFrame(gcv.cv_results_)
     cv_results.to_csv(gcv_output_file)
@@ -156,7 +172,9 @@ def main():
     ax_alpha.set_xscale("log")
     ax_alpha.set_ylabel("concordance index")
     ax_alpha.set_xlabel("alpha")
-    ax_alpha.axvline(gcv.best_params_["coxphsurvivalanalysis__alpha"], linestyle="--", c="r",label="best testing alpha = {:.4f}".format(gcv.best_params_["coxphsurvivalanalysis__alpha"]))
+    ax_alpha.axvline(gcv.best_params_["coxphsurvivalanalysis__alpha"], linestyle="--", c="r",
+        label="best testing alpha = {:.4f}, c-index = {:.4f}".format(gcv.best_params_["coxphsurvivalanalysis__alpha"],max(mean_test))
+        )
     ax_alpha.axhline(0.5, color="grey", linestyle="--")
     ax_alpha.grid(True)
     ax_alpha.legend(loc="best")
@@ -192,6 +210,7 @@ def main():
     cph_pred.fit(result_X,result_Y_AIS_array)
     
     time_points = np.quantile(result_Y_AIS_array["1st AIS date delta with 1 year censor"], np.linspace(0, 0.6, 100))
+    #time_points = np.quantile(result_Y_AIS_array["1st recurrent date delta with 1 year censor"], np.linspace(0, 0.6, 100))
     baseline_surv = cph_pred["coxphsurvivalanalysis"].baseline_survival_
     fig_feat, axs_feat = plt.subplots(2,3,figsize=(16, 8))
     
@@ -209,15 +228,23 @@ def main():
         feature_mean = result_X.loc[:,feat].mean()
         feature_std = result_X.loc[:,feat].std()
 
+        print(feat)
         for j, std in enumerate(std_ranges):
             result_X_sd = result_X_mean.copy()
             result_X_sd.name = "+{} sd".format(std) if std> 0 else "-{} sd".format(abs(std))
             result_X_sd[feat] = feature_mean + std*feature_std
             surv_fns = cph_pred.predict_survival_function(result_X_sd.to_frame().T)
-            risk_scores = cph_pred.predict(result_X_sd.to_frame().T)
-            print("risk scores: ",risk_scores)
             ax.step(time_points,surv_fns[0](time_points), where="post",color = "C{:d}".format(j), alpha =0.5, label=result_X_sd.name)
 
+            # risk_score = np.exp(cph_pred.predict(result_X_sd.to_frame().T))[0]
+            # print("std: {}, risk score: {}".format(std,risk_score))
+
+            # # inverse survival function for median survival time
+            # inverse_surv = interp1d(surv_fns[0](time_points)[::-1], time_points[::-1], bounds_error=False, assume_sorted=True)
+            # # # S(t) = 0.5 <=> t = S^{-1}(0.5) = t
+            # print("95 percentile survival time: {} days".format(inverse_surv(0.95)))
+
+        ax.set_ylim(0.8,1.0)
         ax.set_xlabel("time")
         ax.set_ylabel("survival probability")
         ax.grid(True)
@@ -234,6 +261,7 @@ def main():
     # performance measurement with Harrell’s concordance index (time dependent AUC)
     prediction = cph_pred.predict(result_X)
     result = concordance_index_censored(result_Y["AIS within one year"], result_Y["1st AIS date delta with 1 year censor"], prediction)
+    #result = concordance_index_censored(result_Y["recurrent within one year"], result_Y["1st recurrent date delta with 1 year censor"], prediction)
     print("Overall C-index: {}".format(result[0]))
     
     plt.show()
